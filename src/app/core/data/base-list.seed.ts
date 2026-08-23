@@ -1,0 +1,120 @@
+export interface BaseListSeedCategory {
+  name: string;
+  products: string[];
+}
+
+export const BASE_LIST_SEED: BaseListSeedCategory[] = [
+  {
+    name: 'Fruits et légumes',
+    products: ['Bananes', 'Tomates cerises', 'Poivrons', 'Concombre', 'Carottes', 'Pommes'],
+  },
+  {
+    name: 'Frais',
+    products: [
+      'Emmental',
+      'Emmental râpé',
+      'Comté',
+      'Brie',
+      'Beurre tendre',
+      'Beurre de cuisine',
+      'Jambon blanc',
+      'Oeufs',
+      'Yaourts nature',
+      'Yaourts sucrés',
+      'Compotes Andros',
+      'Skyr Ludo',
+    ],
+  },
+  {
+    name: 'Placard petit dej',
+    products: [
+      'Nutella',
+      'Beurre de cacahuète',
+      'Chicorée',
+      'Sirop d’agave',
+      'Céréales',
+      'Cracottes',
+      'Biscottes',
+      'Pain de mie',
+      'Pains au lait',
+      'Confiture',
+      'Muesli Ludo',
+    ],
+  },
+  {
+    name: 'Placard à épices',
+    products: ['Farine', 'Sucre', 'Chocolat cuisine', 'Chocolat pépites'],
+  },
+  {
+    name: 'Ilôt gauche',
+    products: ['Chewing-gums', 'Chocolat noir 70%', 'Chips', 'Cacahuètes', 'Mélange de fruits sec'],
+  },
+  {
+    name: 'Ilôt droit',
+    products: [
+      'Coulis de tomate',
+      'Crème liquide',
+      'Ratatouille',
+      'Pois chiches',
+      'Coquillettes',
+      'Wraps',
+      'Tortillas',
+      'Riz',
+    ],
+  },
+  {
+    name: 'Sous-sol',
+    products: ['Lait', 'Bonbonne d’eau', 'Eau gazeuse', 'Coca'],
+  },
+  {
+    name: 'Placard évier',
+    products: [
+      'Pom’Potes',
+      'Galettes de riz',
+      'Barres de céréales',
+      'Prince',
+      'Sacs congélation',
+      'Papier alu',
+      'Yaourts à boire Chocolat',
+      'Yaourts à boire Vanille',
+      'Sacs poubelle 50L',
+      'Sacs poubelle 20L',
+    ],
+  },
+  {
+    name: 'Placard couloir',
+    products: [
+      'Déodorant Mennen',
+      'Cotons-tiges',
+      'Tablettes lave-vaisselle',
+      'Essuie-tout',
+      'Gel Douche Petit Marseillais',
+      'Papier toilette',
+      'Liquide vaisselle Arbre Vert',
+    ],
+  },
+  {
+    name: 'Super U',
+    products: [
+      'Vinaigre balsamique',
+      'Jus pomme brique',
+      'Croûtons',
+      'Raisins secs',
+      'Crème anglaise',
+      'Chantilly',
+      'Ketchup',
+      'Mayonnaise',
+      'Moutarde',
+      'Jus de citron',
+      'Sardines',
+      'Pâtes Barilla',
+      'Tourtel',
+      'Huile tournesol',
+      'Huile colza',
+      'Huile d’olive',
+      'Sirop menthe',
+      'Sirop citron',
+      'Sirop grenadine',
+    ],
+  },
+];

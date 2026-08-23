@@ -1,59 +1,49 @@
-# ListeDeCourses
+# Liste de courses (PWA Angular)
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.0.8.
+Application PWA pour gérer des listes de courses par catégories, avec stockage **100 % local** (IndexedDB) sur le smartphone.
 
-## Development server
+## Concept
 
-To start a local development server, run:
+L'application fonctionne en **deux niveaux** :
 
-```bash
-ng serve
-```
+1. **Liste de base** (modèle) — catégories et produits habituels. À configurer une fois (Frigo, Placard, Évier, etc.).
+2. **Liste de courses** (session) — créée à partir du modèle à chaque passage en magasin. Vous cochez les produits et ajustez les quantités.
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Stack
 
-## Code scaffolding
+- **Angular 22** (standalone components)
+- **Dexie.js** (IndexedDB)
+- **@angular/pwa** (service worker, installation offline)
+- **Angular Material** (UI mobile)
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Démarrage
 
 ```bash
-ng generate --help
+npm install
+npm start
 ```
 
-## Building
+Ouvrir `http://localhost:4200`.
 
-To build the project run:
+## Parcours utilisateur
+
+1. **Gérer la liste de base** → ajouter catégories et produits (pré-remplie au premier lancement).
+2. **Nouvelle liste de courses** → copie le modèle avec cases décochées.
+3. **Faire ses courses** → cocher les produits, ajuster les quantités.
+4. **Terminer** → marquer la liste comme terminée (historique conservé).
+
+## Build production (PWA)
 
 ```bash
-ng build
+npm run build
+npx http-server dist/liste-de-courses/browser -p 8080
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Structure des données (IndexedDB)
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+| Table | Rôle |
+|-------|------|
+| `baseCategories` | Catégories du modèle |
+| `baseProducts` | Produits du modèle |
+| `shoppingLists` | Instances de courses |
+| `shoppingListItems` | Produits copiés avec checkbox et quantité |
