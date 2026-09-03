@@ -7,7 +7,8 @@ import {
   MEALS_CATEGORY_NAME,
   MEALS_CATEGORY_ORDER,
 } from '@core/constants/special-categories';
-import { shoppingDb } from '@core/database/shopping-db';
+import { mapShoppingListItem } from '@core/database/sqlite-mappers';
+import { SqliteRepository } from '@core/database/sqlite.repository';
 import type {
   ShoppingListCategoryGroup,
   ShoppingListItem,
@@ -18,24 +19,33 @@ import { LiveQueryService } from './live-query.service';
 @Injectable({ providedIn: 'root' })
 export class ShoppingListItemService {
   private readonly liveQuery = inject(LiveQueryService);
+  private readonly repo = inject(SqliteRepository);
 
   getGroupedItems(listId: number): Observable<ShoppingListCategoryGroup[]> {
     return this.liveQuery.observe(async () => {
-      const list = await shoppingDb.shoppingLists.get(listId);
-      const listType = list ? await shoppingDb.baseListTypes.get(list.listTypeId) : undefined;
-      let items = await shoppingDb.shoppingListItems
-        .where('shoppingListId')
-        .equals(listId)
-        .toArray();
-
-      if (list?.status === 'shopping' || list?.status === 'completed') {
-        items = items.filter((item) => item.checked);
-      }
-
-      items.sort(
-        (a, b) =>
-          a.categoryOrder - b.categoryOrder || a.productOrder - b.productOrder,
+      const listRow = await this.repo.get<Record<string, unknown>>(
+        'SELECT listTypeId, status FROM shoppingLists WHERE id = ?;',
+        [listId],
       );
+      const listTypeRow = listRow
+        ? await this.repo.get<Record<string, unknown>>(
+            'SELECT hasMealCategories FROM baseListTypes WHERE id = ?;',
+            [listRow['listTypeId']],
+          )
+        : undefined;
+
+      const status = listRow ? String(listRow['status']) : undefined;
+      const hasMealCategories = listTypeRow ? Boolean(listTypeRow['hasMealCategories']) : false;
+
+      let sql =
+        'SELECT id, shoppingListId, categoryName, categoryOrder, productName, productOrder, quantity, checked, pickedUp, itemType, recipeUrl FROM shoppingListItems WHERE shoppingListId = ?';
+      if (status === 'shopping' || status === 'completed') {
+        sql += ' AND checked = 1';
+      }
+      sql += ' ORDER BY categoryOrder, productOrder;';
+
+      const itemRows = await this.repo.query<Record<string, unknown>>(sql, [listId]);
+      const items = itemRows.map(mapShoppingListItem);
 
       const groups = new Map<string, ShoppingListCategoryGroup>();
 
@@ -52,22 +62,22 @@ export class ShoppingListItemService {
         group.items.push(item);
       }
 
-      return this.mergeSpecialCategoryGroups(groups, list?.status, listType?.hasMealCategories ?? false);
+      return this.mergeSpecialCategoryGroups(groups, status as ShoppingListStatus, hasMealCategories);
     });
   }
 
   async addIngredient(listId: number, name: string, quantity: number): Promise<number> {
     const productOrder = await this.getNextOrderInCategory(listId, INGREDIENTS_CATEGORY_NAME);
 
-    return shoppingDb.shoppingListItems.add({
+    return this.repo.insert('shoppingListItems', {
       shoppingListId: listId,
       categoryName: INGREDIENTS_CATEGORY_NAME,
       categoryOrder: INGREDIENTS_CATEGORY_ORDER,
       productName: name,
       productOrder,
       quantity,
-      checked: false,
-      pickedUp: false,
+      checked: 0,
+      pickedUp: 0,
       itemType: 'ingredient',
     });
   }
@@ -75,37 +85,41 @@ export class ShoppingListItemService {
   async addMeal(listId: number, name: string, recipeUrl?: string): Promise<number> {
     const productOrder = await this.getNextOrderInCategory(listId, MEALS_CATEGORY_NAME);
 
-    return shoppingDb.shoppingListItems.add({
+    return this.repo.insert('shoppingListItems', {
       shoppingListId: listId,
       categoryName: MEALS_CATEGORY_NAME,
       categoryOrder: MEALS_CATEGORY_ORDER,
       productName: name,
       productOrder,
       quantity: 1,
-      checked: false,
-      pickedUp: false,
+      checked: 0,
+      pickedUp: 0,
       itemType: 'meal',
       recipeUrl,
     });
   }
 
   async updateIngredientItem(id: number, name: string, quantity: number): Promise<void> {
-    await shoppingDb.shoppingListItems.update(id, { productName: name, quantity });
+    await this.repo.update('shoppingListItems', id, { productName: name, quantity });
   }
 
   async updateMealItem(id: number, name: string, recipeUrl?: string): Promise<void> {
-    await shoppingDb.shoppingListItems.update(id, { productName: name, recipeUrl });
+    await this.repo.update('shoppingListItems', id, { productName: name, recipeUrl });
   }
 
   async deleteItem(id: number): Promise<void> {
-    await shoppingDb.shoppingListItems.delete(id);
+    await this.repo.delete('shoppingListItems', id);
   }
 
   async updateItem(
     id: number,
     changes: Partial<Pick<ShoppingListItem, 'quantity' | 'checked' | 'pickedUp'>>,
   ): Promise<void> {
-    await shoppingDb.shoppingListItems.update(id, changes);
+    await this.repo.update('shoppingListItems', id, {
+      quantity: changes.quantity,
+      checked: changes.checked === undefined ? undefined : changes.checked ? 1 : 0,
+      pickedUp: changes.pickedUp === undefined ? undefined : changes.pickedUp ? 1 : 0,
+    });
   }
 
   private mergeSpecialCategoryGroups(
@@ -128,13 +142,11 @@ export class ShoppingListItemService {
   }
 
   private async getNextOrderInCategory(listId: number, categoryName: string): Promise<number> {
-    const items = await shoppingDb.shoppingListItems
-      .where('shoppingListId')
-      .equals(listId)
-      .filter((item) => item.categoryName === categoryName)
-      .toArray();
-
-    const lastOrder = items.reduce((max, item) => Math.max(max, item.productOrder), -1);
-    return lastOrder + 1;
+    const rows = await this.repo.query<Record<string, unknown>>(
+      'SELECT MAX(productOrder) as maxOrder FROM shoppingListItems WHERE shoppingListId = ? AND categoryName = ?;',
+      [listId, categoryName],
+    );
+    const maxOrder = rows[0]?.['maxOrder'] === null ? -1 : Number(rows[0]?.['maxOrder'] ?? -1);
+    return maxOrder + 1;
   }
 }

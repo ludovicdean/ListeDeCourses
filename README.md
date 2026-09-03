@@ -1,6 +1,6 @@
 # Liste de courses (PWA Angular)
 
-Application PWA pour gérer des listes de courses par catégories, avec stockage **100 % local** (IndexedDB) sur le smartphone.
+Application PWA pour gérer des listes de courses par catégories, avec stockage **100 % local** (SQLite + OPFS) sur le smartphone.
 
 ## Concept
 
@@ -22,13 +22,13 @@ L'application fonctionne en **deux niveaux** :
 | Statut | Description |
 |--------|-------------|
 | `preparing` | Sélection des produits, ajout de repas/ingrédients |
-| `ready` | Liste validée, prête pour le magasin (cases « pris ») |
+| `shopping` | Liste validée, prête pour le magasin (cases « pris ») |
 | `completed` | Courses terminées (historique) |
 
 ## Stack
 
 - **Angular 22** (standalone components, lazy loading)
-- **Dexie.js** (IndexedDB)
+- **SQLite WASM + OPFS** (Origin Private File System) — stockage relationnel local, persistant et offline
 - **@angular/pwa** (service worker, installation offline)
 - **Angular Material** (UI mobile)
 
@@ -40,6 +40,8 @@ npm start
 ```
 
 Ouvrir `http://localhost:4200`.
+
+Le serveur de développement ajoute automatiquement les en-têtes COOP/COEP requis par SQLite WASM + OPFS.
 
 ## Scripts
 
@@ -72,11 +74,20 @@ npm run build
 npx http-server dist/liste-de-courses/browser -p 8080
 ```
 
+Pour SQLite WASM + OPFS, le serveur doit envoyer les en-têtes `Cross-Origin-Opener-Policy: same-origin` et `Cross-Origin-Embedder-Policy: require-corp`. `http-server` le fait avec `--coop` :
+
+```bash
+npx http-server dist/liste-de-courses/browser -p 8080 --coop
+```
+
 ## Structure du code
 
 ```
 src/app/
 ├── core/           # modèles, services, constantes, erreurs métier
+│   ├── database/   # SQLite (schema, service, repository, mappers)
+│   ├── services/   # services métier
+│   └── utils/      # helpers et guards
 ├── features/       # pages et composants par fonctionnalité
 │   ├── home/
 │   ├── list-type-hub/
@@ -93,7 +104,7 @@ Alias TypeScript : `@app/*`, `@core/*`, `@features/*` (configurés dans `tsconfi
 
 Un workflow GitHub Actions (`.github/workflows/ci.yml`) exécute `lint`, `test` et `build` sur chaque push/PR vers `main` ou `master`.
 
-## Structure des données (IndexedDB)
+## Structure des données (SQLite)
 
 | Table | Rôle |
 |-------|------|
@@ -103,3 +114,12 @@ Un workflow GitHub Actions (`.github/workflows/ci.yml`) exécute `lint`, `test` 
 | `baseMeals` | Repas (liste hebdo) |
 | `shoppingLists` | Sessions de courses |
 | `shoppingListItems` | Produits copiés avec checkbox et quantité |
+
+## Migrations SQL
+
+Le schéma et les futures évolutions sont gérés dans :
+
+- `src/app/core/database/sqlite-schema.ts` — schéma initial et tables
+- `src/app/core/database/migrations/` — scripts de migration versionnés
+
+SQLite WASM gère une base `liste-de-courses.sqlite3` dans l'OPFS. Les migrations sont appliquées au démarrage de l'application.
