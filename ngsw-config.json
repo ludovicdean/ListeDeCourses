@@ -12,7 +12,9 @@
           "/index.html",
           "/manifest.webmanifest",
           "/*.css",
-          "/*.js"
+          "/*.js",
+          "/assets/sqlite-wasm/sqlite3.wasm",
+          "/assets/sqlite-wasm/sqlite3-worker1.mjs"
         ]
       }
     },

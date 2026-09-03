@@ -1,7 +1,8 @@
 import { inject, Injectable } from '@angular/core';
 
 import { BASE_LIST_SEED } from '@core/data/base-list.seed';
-import { shoppingDb } from '@core/database/shopping-db';
+import { mapBaseListType } from '@core/database/sqlite-mappers';
+import { SqliteRepository } from '@core/database/sqlite.repository';
 import { BaseCategoryService } from './base-category.service';
 import { BaseListTypeService } from './base-list-type.service';
 import { ShoppingListService } from './shopping-list.service';
@@ -11,37 +12,41 @@ export class BaseListSeedService {
   private readonly baseCategoryService = inject(BaseCategoryService);
   private readonly baseListTypeService = inject(BaseListTypeService);
   private readonly shoppingListService = inject(ShoppingListService);
+  private readonly repo = inject(SqliteRepository);
 
   async seedIfEmpty(): Promise<void> {
     await this.baseListTypeService.ensureDefaultTypes();
 
-    const listTypes = await shoppingDb.baseListTypes.orderBy('order').toArray();
+    const listTypeRows = await this.repo.query<Record<string, unknown>>(
+      'SELECT id, name, orderIndex, hasMealCategories FROM baseListTypes ORDER BY orderIndex;',
+    );
+    const listTypes = listTypeRows.map(mapBaseListType);
     const weeklyType = listTypes.find((type) => type.hasMealCategories);
     if (!weeklyType?.id) {
       return;
     }
 
-    const weeklyCategoryCount = await shoppingDb.baseCategories
-      .where('listTypeId')
-      .equals(weeklyType.id)
-      .filter((category) => category.type === 'standard')
-      .count();
+    const standardCountRows = await this.repo.query<Record<string, unknown>>(
+      'SELECT COUNT(*) as count FROM baseCategories WHERE listTypeId = ? AND type = ?;',
+      [weeklyType.id, 'standard'],
+    );
+    const weeklyCategoryCount = Number(standardCountRows[0]?.['count'] ?? 0);
 
     if (weeklyCategoryCount === 0) {
-      await shoppingDb.transaction('rw', shoppingDb.baseCategories, shoppingDb.baseProducts, async () => {
+      await this.repo.transaction(async () => {
         for (const [categoryOrder, categorySeed] of BASE_LIST_SEED.entries()) {
-          const categoryId = await shoppingDb.baseCategories.add({
+          const categoryId = await this.repo.insert('baseCategories', {
             listTypeId: weeklyType.id!,
             name: categorySeed.name,
-            order: categoryOrder,
+            orderIndex: categoryOrder,
             type: 'standard',
           });
 
           for (const [productOrder, productName] of categorySeed.products.entries()) {
-            await shoppingDb.baseProducts.add({
+            await this.repo.insert('baseProducts', {
               categoryId,
               name: productName,
-              order: productOrder,
+              orderIndex: productOrder,
             });
           }
         }
