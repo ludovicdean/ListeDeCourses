@@ -1,0 +1,57 @@
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.type-card mat-card-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px !important;
+}
+
+.type-icon {
+  font-size: 2rem;
+  width: 2rem;
+  height: 2rem;
+  color: var(--mat-sys-primary);
+  flex-shrink: 0;
+}
+
+.type-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.type-text h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.type-text p {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.chevron {
+  opacity: 0.4;
+  flex-shrink: 0;
+}

@@ -3,7 +3,8 @@
   "version": 1,
   "cli": {
     "packageManager": "npm",
-    "analytics": false
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -12,28 +13,36 @@
       "schematics": {
         "@schematics/angular:component": {
           "style": "scss",
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/features"
         },
         "@schematics/angular:class": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/core"
         },
         "@schematics/angular:directive": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/shared"
         },
         "@schematics/angular:guard": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/core/guards"
         },
         "@schematics/angular:interceptor": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/core"
         },
         "@schematics/angular:pipe": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/shared"
         },
         "@schematics/angular:resolver": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/core"
         },
         "@schematics/angular:service": {
-          "skipTests": true
+          "skipTests": true,
+          "path": "src/app/core/services"
         }
       },
       "root": "",
@@ -90,6 +99,19 @@
             }
           },
           "defaultConfiguration": "development"
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+          }
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "tsconfig.spec.json",
+            "buildTarget": "liste-de-courses:build:development"
+          }
         }
       }
     }

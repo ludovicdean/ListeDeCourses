@@ -1,0 +1,41 @@
+@if (category(); as categoryValue) {
+  <mat-toolbar color="primary">
+    <a mat-icon-button [routerLink]="['/base', listTypeId()]" aria-label="Retour">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+    <span>{{ categoryValue.name }}</span>
+    <span class="spacer"></span>
+    <button mat-icon-button aria-label="Ajouter un produit" (click)="openCreateDialog()">
+      <mat-icon>add</mat-icon>
+    </button>
+  </mat-toolbar>
+
+  @if (products$ | async; as products) {
+    @if (products.length === 0) {
+      <p class="empty-state empty-state--centered">Aucun produit dans cette catégorie.</p>
+    } @else {
+      <mat-list>
+        @for (product of products; track product.id) {
+          <mat-list-item>
+            <span matListItemTitle>{{ product.name }}</span>
+            <span matListItemMeta class="actions">
+              <button mat-icon-button aria-label="Modifier" (click)="openEditDialog(product)">
+                <mat-icon>edit</mat-icon>
+              </button>
+              <button mat-icon-button aria-label="Supprimer" (click)="deleteProduct(product)">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </span>
+          </mat-list-item>
+        }
+      </mat-list>
+    }
+  }
+} @else {
+  <mat-toolbar color="primary">
+    <a mat-icon-button [routerLink]="['/base', listTypeId()]" aria-label="Retour">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+    <span>Catégorie introuvable</span>
+  </mat-toolbar>
+}

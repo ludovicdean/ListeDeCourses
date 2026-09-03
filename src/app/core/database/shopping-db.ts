@@ -1,10 +1,10 @@
 import Dexie, { type Table } from 'dexie';
 
-import type { BaseCategory } from '../models/base-category.model';
-import type { BaseListType } from '../models/base-list-type.model';
-import type { BaseMeal } from '../models/base-meal.model';
-import type { BaseProduct } from '../models/base-product.model';
-import type { ShoppingList, ShoppingListItem } from '../models/shopping-list.model';
+import type { BaseCategory } from '@core/models/base-category.model';
+import type { BaseListType } from '@core/models/base-list-type.model';
+import type { BaseMeal } from '@core/models/base-meal.model';
+import type { BaseProduct } from '@core/models/base-product.model';
+import type { ShoppingList, ShoppingListItem } from '@core/models/shopping-list.model';
 
 export class ShoppingDatabase extends Dexie {
   baseListTypes!: Table<BaseListType, number>;
@@ -126,6 +126,65 @@ export class ShoppingDatabase extends Dexie {
           .modify((list: ShoppingList & { listTypeId?: number }) => {
             list.listTypeId = weeklyTypeId;
           });
+      });
+
+    this.version(6)
+      .stores({
+        baseListTypes: '++id, name, order',
+        baseCategories: '++id, listTypeId, [listTypeId+type], name, order, type',
+        baseProducts: '++id, categoryId, name, order',
+        baseMeals: '++id, listTypeId, name, order',
+        shoppingLists: '++id, listTypeId, createdAt, status',
+        shoppingListItems: '++id, shoppingListId, checked, pickedUp, itemType, categoryOrder, productOrder',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table('shoppingLists')
+          .toCollection()
+          .modify((list: ShoppingList) => {
+            if (list.name != null) {
+              list.name = String(list.name).trim();
+            }
+          });
+      });
+
+    this.version(7)
+      .stores({
+        baseListTypes: '++id, name, order',
+        baseCategories: '++id, listTypeId, [listTypeId+type], name, order, type',
+        baseProducts: '++id, categoryId, name, order',
+        baseMeals: '++id, listTypeId, name, order',
+        shoppingLists: '++id, listTypeId, createdAt, status',
+        shoppingListItems: '++id, shoppingListId, checked, pickedUp, itemType, categoryOrder, productOrder',
+      })
+      .upgrade(async (transaction) => {
+        const listTypes = await transaction.table('baseListTypes').toArray();
+        const typeById = new Map(
+          listTypes
+            .filter((type): type is BaseListType & { id: number } => type.id !== undefined)
+            .map((type) => [type.id, type]),
+        );
+
+        const lists = await transaction.table('shoppingLists').toArray();
+
+        for (const list of lists) {
+          const trimmedName = typeof list.name === 'string' ? list.name.trim() : '';
+          if (trimmedName || list.id === undefined) {
+            continue;
+          }
+
+          const listType = typeById.get(Number(list.listTypeId));
+          const typeName = listType?.name?.trim() || 'Liste';
+          const dateStr = new Date(list.createdAt || Date.now()).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          });
+
+          await transaction.table('shoppingLists').update(list.id, {
+            name: `${typeName} du ${dateStr}`,
+          });
+        }
       });
   }
 }

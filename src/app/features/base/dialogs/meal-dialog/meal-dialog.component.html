@@ -1,0 +1,25 @@
+<h2 mat-dialog-title>{{ data.meal ? 'Modifier le repas' : 'Nouveau repas' }}</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="form" class="form">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Nom du repas</mat-label>
+      <input matInput formControlName="name" placeholder="Ex. Gratin dauphinois" />
+      @if (form.controls.name.hasError('required')) {
+        <mat-error>Le nom est obligatoire</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Lien vers la recette (optionnel)</mat-label>
+      <input matInput formControlName="recipeUrl" placeholder="https://..." />
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="dialogRef.close()">Annuler</button>
+  <button mat-flat-button type="button" [disabled]="form.invalid" (click)="submit()">
+    Enregistrer
+  </button>
+</mat-dialog-actions>

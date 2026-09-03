@@ -1,0 +1,99 @@
+:host {
+  display: block;
+}
+
+.session-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #eceff1;
+  border: 1px solid #cfd8dc;
+}
+
+.session-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: #1a1a1a;
+}
+
+.session-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #1a1a1a;
+}
+
+.session-date {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #546e7a;
+}
+
+.session-status {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+.session-status.preparing {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.session-status.shopping {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.session-status.completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.session-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  color: #455a64;
+
+  mat-icon {
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+  }
+}
+
+.session-action.validate mat-icon {
+  color: #1565c0;
+}
+
+.session-action.complete mat-icon {
+  color: #2e7d32;
+}

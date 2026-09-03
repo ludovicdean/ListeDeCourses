@@ -4,7 +4,7 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { provideServiceWorker } from '@angular/service-worker';
 
 import { routes } from './app.routes';
-import { BaseListSeedService } from './core/services/base-list-seed.service';
+import { BaseListSeedService } from '@core/services/base-list-seed.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [

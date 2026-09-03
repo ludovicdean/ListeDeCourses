@@ -1,0 +1,51 @@
+<article class="session-card" [attr.data-session-id]="data().id">
+  <button type="button" class="session-main" (click)="open.emit()">
+    <p class="session-title">{{ data().name || 'Session #' + data().id }}</p>
+    <p class="session-date">
+      {{ data().createdAt | date: 'd MMM y, HH:mm' : '' : 'fr' }}
+      <br />
+      <small>debug: id={{ data().id }} name='{{ data().name }}' status={{ data().status }}</small>
+    </p>
+    <span class="session-status" [class]="data().status">
+      @switch (data().status) {
+        @case ('preparing') {
+          Préparation
+        }
+        @case ('shopping') {
+          En magasin
+        }
+        @case ('completed') {
+          Terminée
+        }
+      }
+    </span>
+  </button>
+  <div class="session-actions">
+    <button type="button" class="session-action" aria-label="Modifier" (click)="edit.emit()">
+      <mat-icon fontSet="material-icons">edit</mat-icon>
+    </button>
+    @if (data().status === 'preparing') {
+      <button
+        type="button"
+        class="session-action validate"
+        aria-label="Passer en magasin"
+        (click)="validate.emit()"
+      >
+        <mat-icon fontSet="material-icons">shopping_cart</mat-icon>
+      </button>
+    }
+    @if (data().status === 'shopping') {
+      <button
+        type="button"
+        class="session-action complete"
+        aria-label="Terminer les courses"
+        (click)="complete.emit()"
+      >
+        <mat-icon fontSet="material-icons">done_all</mat-icon>
+      </button>
+    }
+    <button type="button" class="session-action" aria-label="Supprimer" (click)="remove.emit()">
+      <mat-icon fontSet="material-icons">delete</mat-icon>
+    </button>
+  </div>
+</article>

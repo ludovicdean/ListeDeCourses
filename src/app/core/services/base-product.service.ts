@@ -1,17 +1,17 @@
-import { Injectable } from '@angular/core';
-import { liveQuery } from 'dexie';
-import { from, type Observable } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { type Observable } from 'rxjs';
 
-import { shoppingDb } from '../database/shopping-db';
-import type { BaseProduct, BaseProductInput } from '../models/base-product.model';
+import { shoppingDb } from '@core/database/shopping-db';
+import type { BaseProduct, BaseProductInput } from '@core/models/base-product.model';
+import { LiveQueryService } from './live-query.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseProductService {
+  private readonly liveQuery = inject(LiveQueryService);
+
   getByCategory(categoryId: number): Observable<BaseProduct[]> {
-    return from(
-      liveQuery(() =>
-        shoppingDb.baseProducts.where('categoryId').equals(categoryId).sortBy('order'),
-      ),
+    return this.liveQuery.observe(() =>
+      shoppingDb.baseProducts.where('categoryId').equals(categoryId).sortBy('order'),
     );
   }
 

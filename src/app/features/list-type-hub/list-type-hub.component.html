@@ -1,0 +1,46 @@
+@if (vm().listType; as type) {
+  <mat-toolbar color="primary">
+    <a mat-icon-button routerLink="/" aria-label="Accueil">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+    <span>{{ type.name }}</span>
+  </mat-toolbar>
+
+  <div class="page">
+    <mat-card class="actions-card">
+      <mat-card-content>
+        <button mat-flat-button color="primary" class="main-action" (click)="createNewList(type.id!)">
+          <mat-icon>{{ getMeta(type.name).icon }}</mat-icon>
+          Préparer une liste
+        </button>
+        <a mat-stroked-button class="secondary-action" [routerLink]="['/base', type.id]">
+          <mat-icon>tune</mat-icon>
+          Modifier la liste de base
+        </a>
+      </mat-card-content>
+    </mat-card>
+
+    <section class="sessions">
+      <h2>Mes sessions ({{ vm().sessions.length }})</h2>
+
+      @if (vm().sessions.length === 0) {
+        <p class="empty-state">
+          Aucune liste pour l'instant. Commencez par « Préparer une liste ».
+        </p>
+      } @else {
+        <div class="session-list">
+          @for (session of vm().sessions; track session.id) {
+            <app-session-card
+              [data]="session"
+              (open)="openList(session.id)"
+              (edit)="editList(session.id)"
+              (validate)="validateList(session.id)"
+              (complete)="completeList(session.id)"
+              (remove)="deleteList(session.id)"
+            />
+          }
+        </div>
+      }
+    </section>
+  </div>
+}

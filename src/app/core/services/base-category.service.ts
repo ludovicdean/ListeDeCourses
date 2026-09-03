@@ -1,47 +1,43 @@
-import { Injectable } from '@angular/core';
-import { liveQuery } from 'dexie';
-import { from, type Observable } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { type Observable } from 'rxjs';
 
 import {
   INGREDIENTS_CATEGORY_NAME,
   INGREDIENTS_CATEGORY_ORDER,
   MEALS_CATEGORY_NAME,
   MEALS_CATEGORY_ORDER,
-} from '../constants/special-categories';
-import { shoppingDb } from '../database/shopping-db';
-import type { BaseCategory, BaseCategoryInput } from '../models/base-category.model';
-import { isSpecialCategory } from '../models/base-category.model';
+} from '@core/constants/special-categories';
+import { shoppingDb } from '@core/database/shopping-db';
+import type { BaseCategory, BaseCategoryInput } from '@core/models/base-category.model';
+import { isSpecialCategory } from '@core/models/base-category.model';
+import { LiveQueryService } from './live-query.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseCategoryService {
+  private readonly liveQuery = inject(LiveQueryService);
+
   getStandardCategories(listTypeId: number): Observable<BaseCategory[]> {
-    return from(
-      liveQuery(() =>
-        shoppingDb.baseCategories
-          .where('[listTypeId+type]')
-          .equals([listTypeId, 'standard'])
-          .sortBy('order'),
-      ),
+    return this.liveQuery.observe(() =>
+      shoppingDb.baseCategories
+        .where('[listTypeId+type]')
+        .equals([listTypeId, 'standard'])
+        .sortBy('order'),
     );
   }
 
   getById(id: number): Observable<BaseCategory | undefined> {
-    return from(liveQuery(() => shoppingDb.baseCategories.get(id)));
+    return this.liveQuery.observe(() => shoppingDb.baseCategories.get(id));
   }
 
   getIngredientsCategory(listTypeId: number): Observable<BaseCategory | undefined> {
-    return from(
-      liveQuery(() =>
-        shoppingDb.baseCategories.where('[listTypeId+type]').equals([listTypeId, 'ingredients']).first(),
-      ),
+    return this.liveQuery.observe(() =>
+      shoppingDb.baseCategories.where('[listTypeId+type]').equals([listTypeId, 'ingredients']).first(),
     );
   }
 
   getMealsCategory(listTypeId: number): Observable<BaseCategory | undefined> {
-    return from(
-      liveQuery(() =>
-        shoppingDb.baseCategories.where('[listTypeId+type]').equals([listTypeId, 'meals']).first(),
-      ),
+    return this.liveQuery.observe(() =>
+      shoppingDb.baseCategories.where('[listTypeId+type]').equals([listTypeId, 'meals']).first(),
     );
   }
 

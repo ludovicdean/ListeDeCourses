@@ -1,0 +1,29 @@
+<mat-toolbar color="primary">
+  <span>Listes de courses</span>
+</mat-toolbar>
+
+<div class="page">
+  <p class="intro">Choisissez le type de liste à utiliser.</p>
+
+  @if (cards(); as cards) {
+    <div class="cards">
+      @for (card of cards; track card.id) {
+        <a class="card-link" [routerLink]="['/type', card.id]">
+          <mat-card class="type-card">
+            <mat-card-content>
+              <mat-icon class="type-icon" aria-hidden="true">{{ card.meta.icon }}</mat-icon>
+              <div class="type-text">
+                <h2>{{ card.name }}</h2>
+                <p>{{ card.meta.description }}</p>
+                @if (card.activeCount > 0) {
+                  <span class="badge">{{ card.activeCount }} en cours</span>
+                }
+              </div>
+              <mat-icon class="chevron" aria-hidden="true">chevron_right</mat-icon>
+            </mat-card-content>
+          </mat-card>
+        </a>
+      }
+    </div>
+  }
+</div>

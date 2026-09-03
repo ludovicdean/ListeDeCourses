@@ -1,19 +1,21 @@
-import { Injectable } from '@angular/core';
-import { liveQuery } from 'dexie';
-import { from, type Observable } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { type Observable } from 'rxjs';
 
-import { DEFAULT_LIST_TYPES } from '../constants/list-types';
-import { shoppingDb } from '../database/shopping-db';
-import type { BaseListType } from '../models/base-list-type.model';
+import { DEFAULT_LIST_TYPES } from '@core/constants/list-type.config';
+import { shoppingDb } from '@core/database/shopping-db';
+import type { BaseListType } from '@core/models/base-list-type.model';
+import { LiveQueryService } from './live-query.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseListTypeService {
-  readonly listTypes$: Observable<BaseListType[]> = from(
-    liveQuery(() => shoppingDb.baseListTypes.orderBy('order').toArray()),
+  private readonly liveQuery = inject(LiveQueryService);
+
+  readonly listTypes$: Observable<BaseListType[]> = this.liveQuery.observe(() =>
+    shoppingDb.baseListTypes.orderBy('order').toArray(),
   );
 
   getById(id: number): Observable<BaseListType | undefined> {
-    return from(liveQuery(() => shoppingDb.baseListTypes.get(id)));
+    return this.liveQuery.observe(() => shoppingDb.baseListTypes.get(id));
   }
 
   async ensureDefaultTypes(): Promise<void> {
