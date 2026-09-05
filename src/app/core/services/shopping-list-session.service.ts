@@ -11,6 +11,7 @@ import {
   mapBaseListType,
   mapBaseMeal,
   mapShoppingList,
+  mapShoppingListItem,
   toSqliteBoolean,
 } from '@core/database/sqlite-mappers';
 import { SqliteRepository } from '@core/database/sqlite.repository';
@@ -20,8 +21,15 @@ import {
   MEALS_CATEGORY_NAME,
   MEALS_CATEGORY_ORDER,
 } from '@core/constants/special-categories';
-import type { ShoppingList, ShoppingListStatus } from '@core/models/shopping-list.model';
-import { extractSessionName, formatSessionDate, formatSessionName } from '@core/utils/session-name.utils';
+import type { ShoppingList, ShoppingListItem, ShoppingListStatus } from '@core/models/shopping-list.model';
+import {
+  LIDL_SESSION_PREFIX,
+  SUPER_U_SESSION_PREFIX,
+  extractSessionName,
+  formatSessionName,
+  formatStoreSessionName,
+  resolveUniqueStoreSessionIndex,
+} from '@core/utils/session-name.utils';
 import { LiveQueryService } from './live-query.service';
 
 @Injectable({ providedIn: 'root' })
@@ -98,15 +106,15 @@ export class ShoppingListSessionService {
       }
 
       const listType = typeById.get(listTypeId);
-      const typeName = listType?.name?.trim() || 'Liste';
 
       const needsName = !extractSessionName(normalized);
       const needsTypeId = listType !== undefined && normalized.listTypeId !== listTypeId;
 
       if (needsName || needsTypeId) {
-        const dateStr = formatSessionDate(normalized.createdAt);
-        const baseName = `${typeName} du ${dateStr}`;
-        const uniqueName = await this.buildUniqueListName(listTypeId, typeName, baseName, id);
+        const createdAt = normalized.createdAt;
+        const existingNames = await this.fetchExistingSessionNames(listTypeId, id);
+        const index = resolveUniqueStoreSessionIndex(existingNames, LIDL_SESSION_PREFIX, createdAt);
+        const uniqueName = formatStoreSessionName(LIDL_SESSION_PREFIX, createdAt, index);
 
         await this.repo.update('shoppingLists', id, {
           name: uniqueName,
@@ -116,7 +124,7 @@ export class ShoppingListSessionService {
     }
   }
 
-  async createFromBase(listTypeId: number, name?: string): Promise<number> {
+  async createFromBase(listTypeId: number): Promise<number> {
     const listTypeRow = await this.repo.get<Record<string, unknown>>(
       'SELECT id, name, orderIndex, hasMealCategories FROM baseListTypes WHERE id = ?;',
       [listTypeId],
@@ -131,7 +139,11 @@ export class ShoppingListSessionService {
       throw new BaseEmptyError();
     }
 
-    const listName = await this.buildUniqueListName(listTypeId, listType.name, name);
+    const listName = await this.buildUniqueStoreSessionName(
+      listTypeId,
+      LIDL_SESSION_PREFIX,
+      Date.now(),
+    );
 
     const categoryRows = await this.repo.query<Record<string, unknown>>(
       'SELECT id, listTypeId, name, orderIndex, type FROM baseCategories WHERE listTypeId = ? ORDER BY orderIndex;',
@@ -236,6 +248,11 @@ export class ShoppingListSessionService {
   }
 
   async updateStatus(id: number, status: ShoppingListStatus): Promise<void> {
+    if (status === 'completed') {
+      await this.completeSession(id);
+      return;
+    }
+
     await this.repo.update('shoppingLists', id, { status });
     this.invalidateSessionCache(id);
   }
@@ -251,6 +268,7 @@ export class ShoppingListSessionService {
         bind: [id],
       });
     });
+    this.repo.notifyChange('shoppingLists');
     this.invalidateSessionCache(id);
   }
 
@@ -274,6 +292,10 @@ export class ShoppingListSessionService {
     );
     const typeName = listTypeRow?.['name'] ? String(listTypeRow['name']) : 'Liste';
     const lists = await this.fetchListsByType(listTypeId);
+    const listIds = lists
+      .filter((list): list is ShoppingList & { id: number } => list.id !== undefined)
+      .map((list) => list.id);
+    const selectedCounts = await this.fetchSelectedCountsByListIds(listIds);
 
     return lists
       .filter((list): list is ShoppingList & { id: number } => list.id !== undefined)
@@ -282,7 +304,27 @@ export class ShoppingListSessionService {
         name: formatSessionName(list, typeName),
         createdAt: list.createdAt,
         status: list.status,
+        selectedCount: selectedCounts.get(list.id) ?? 0,
       }));
+  }
+
+  private async fetchSelectedCountsByListIds(listIds: number[]): Promise<Map<number, number>> {
+    const counts = new Map<number, number>();
+    if (listIds.length === 0) {
+      return counts;
+    }
+
+    const placeholders = listIds.map(() => '?').join(', ');
+    const rows = await this.repo.query<Record<string, unknown>>(
+      `SELECT shoppingListId, COUNT(*) as count FROM shoppingListItems WHERE checked = 1 AND shoppingListId IN (${placeholders}) GROUP BY shoppingListId;`,
+      listIds,
+    );
+
+    for (const row of rows) {
+      counts.set(Number(row['shoppingListId']), Number(row['count'] ?? 0));
+    }
+
+    return counts;
   }
 
   private async fetchListsByType(listTypeId: number): Promise<ShoppingList[]> {
@@ -328,42 +370,101 @@ export class ShoppingListSessionService {
     return 'preparing';
   }
 
-  private async buildUniqueListName(
+  private async completeSession(id: number): Promise<void> {
+    const session = await this.loadSessionById(id);
+    if (session?.id === undefined) {
+      return;
+    }
+
+    const sessionId = session.id;
+    const unpickedItems =
+      session.status === 'shopping' ? await this.fetchUnpickedShoppingItems(sessionId) : [];
+
+    await this.repo.transaction(async () => {
+      await this.repo.exec({
+        sql: 'UPDATE shoppingLists SET status = ? WHERE id = ?;',
+        bind: ['completed', sessionId],
+      });
+
+      if (unpickedItems.length > 0) {
+        await this.createFollowUpSession({ ...session, id: sessionId }, unpickedItems);
+      }
+    });
+
+    this.repo.notifyChange('shoppingLists');
+    this.invalidateSessionCache(sessionId);
+  }
+
+  private async createFollowUpSession(
+    sourceSession: ShoppingList & { id: number },
+    items: ShoppingListItem[],
+  ): Promise<void> {
+    const createdAt = Date.now();
+    const listName = await this.buildUniqueStoreSessionName(
+      sourceSession.listTypeId,
+      SUPER_U_SESSION_PREFIX,
+      createdAt,
+    );
+
+    const listId = await this.repo.insert('shoppingLists', {
+      listTypeId: sourceSession.listTypeId,
+      name: listName,
+      createdAt,
+      status: 'preparing',
+    });
+
+    for (const item of items) {
+      await this.repo.insert('shoppingListItems', {
+        shoppingListId: listId,
+        categoryName: item.categoryName,
+        categoryOrder: item.categoryOrder,
+        productName: item.productName,
+        productOrder: item.productOrder,
+        quantity: item.quantity,
+        checked: 1,
+        pickedUp: 0,
+        itemType: item.itemType,
+        recipeUrl: item.recipeUrl,
+      });
+    }
+  }
+
+  private async fetchUnpickedShoppingItems(listId: number): Promise<ShoppingListItem[]> {
+    const rows = await this.repo.query<Record<string, unknown>>(
+      `SELECT id, shoppingListId, categoryName, categoryOrder, productName, productOrder, quantity, checked, pickedUp, itemType, recipeUrl
+       FROM shoppingListItems
+       WHERE shoppingListId = ? AND checked = 1 AND pickedUp = 0
+       ORDER BY categoryOrder, productOrder;`,
+      [listId],
+    );
+
+    return rows.map(mapShoppingListItem);
+  }
+
+  private async buildUniqueStoreSessionName(
     listTypeId: number,
-    listTypeName: string,
-    customName?: string,
+    prefix: string,
+    createdAt: number,
     excludeId?: number,
   ): Promise<string> {
-    const baseName =
-      customName?.trim() ||
-      `${listTypeName} du ${new Date().toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })}`;
+    const existingNames = await this.fetchExistingSessionNames(listTypeId, excludeId);
+    const index = resolveUniqueStoreSessionIndex(existingNames, prefix, createdAt);
+    return formatStoreSessionName(prefix, createdAt, index);
+  }
 
+  private async fetchExistingSessionNames(
+    listTypeId: number,
+    excludeId?: number,
+  ): Promise<string[]> {
     const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, name FROM shoppingLists WHERE listTypeId = ?;',
+      'SELECT id, listTypeId, name, createdAt, status FROM shoppingLists WHERE listTypeId = ?;',
       [listTypeId],
     );
 
-    const existingNames = new Set(
-      rows
-        .filter((record) => Number(record['id']) !== excludeId)
-        .map((record) => extractSessionName(this.normalizeSession(record)))
-        .filter((name) => name.length > 0),
-    );
-
-    if (!existingNames.has(baseName)) {
-      return baseName;
-    }
-
-    let index = 2;
-    while (existingNames.has(`${baseName} (${index})`)) {
-      index++;
-    }
-
-    return `${baseName} (${index})`;
+    return rows
+      .filter((record) => Number(record['id']) !== excludeId)
+      .map((record) => extractSessionName(this.normalizeSession(record)))
+      .filter((name) => name.length > 0);
   }
 
   private async isBaseEmpty(listTypeId: number): Promise<boolean> {

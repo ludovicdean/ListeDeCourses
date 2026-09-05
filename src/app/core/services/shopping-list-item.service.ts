@@ -40,7 +40,7 @@ export class ShoppingListItemService {
       let sql =
         'SELECT id, shoppingListId, categoryName, categoryOrder, productName, productOrder, quantity, checked, pickedUp, itemType, recipeUrl FROM shoppingListItems WHERE shoppingListId = ?';
       if (status === 'shopping' || status === 'completed') {
-        sql += ' AND checked = 1';
+        sql += " AND (checked = 1 OR itemType IN ('ingredient', 'meal'))";
       }
       sql += ' ORDER BY categoryOrder, productOrder;';
 
@@ -124,21 +124,45 @@ export class ShoppingListItemService {
 
   private mergeSpecialCategoryGroups(
     groups: Map<string, ShoppingListCategoryGroup>,
-    status: ShoppingListStatus | undefined,
+    _status: ShoppingListStatus | undefined,
     hasMealCategories: boolean,
   ): ShoppingListCategoryGroup[] {
-    if (status === 'preparing' && hasMealCategories) {
-      for (const special of [
-        { categoryName: INGREDIENTS_CATEGORY_NAME, categoryOrder: INGREDIENTS_CATEGORY_ORDER },
-        { categoryName: MEALS_CATEGORY_NAME, categoryOrder: MEALS_CATEGORY_ORDER },
-      ]) {
-        if (!groups.has(special.categoryName)) {
-          groups.set(special.categoryName, { ...special, items: [] });
-        }
+    const standard: ShoppingListCategoryGroup[] = [];
+    let ingredients: ShoppingListCategoryGroup | undefined;
+    let meals: ShoppingListCategoryGroup | undefined;
+
+    for (const group of groups.values()) {
+      if (group.categoryName === INGREDIENTS_CATEGORY_NAME) {
+        ingredients = group;
+      } else if (group.categoryName === MEALS_CATEGORY_NAME) {
+        meals = group;
+      } else {
+        standard.push(group);
       }
     }
 
-    return [...groups.values()].sort((a, b) => a.categoryOrder - b.categoryOrder);
+    standard.sort((a, b) => a.categoryOrder - b.categoryOrder);
+
+    const result = [...standard];
+
+    if (hasMealCategories) {
+      result.push(
+        ingredients ?? {
+          categoryName: INGREDIENTS_CATEGORY_NAME,
+          categoryOrder: INGREDIENTS_CATEGORY_ORDER,
+          items: [],
+        },
+      );
+      result.push(
+        meals ?? {
+          categoryName: MEALS_CATEGORY_NAME,
+          categoryOrder: MEALS_CATEGORY_ORDER,
+          items: [],
+        },
+      );
+    }
+
+    return result;
   }
 
   private async getNextOrderInCategory(listId: number, categoryName: string): Promise<number> {

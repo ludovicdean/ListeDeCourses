@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { RouterLink } from '@angular/router';
-import { switchMap } from 'rxjs';
+import { filter, of, switchMap } from 'rxjs';
 
 import {
   IngredientDialogComponent,
@@ -51,7 +51,9 @@ export class ShoppingListViewComponent {
   private readonly notificationService = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly listId$ = routeParamNumber$('id');
+  private readonly listId$ = routeParamNumber$('id').pipe(filter((id) => id > 0));
+
+  protected readonly listId = toSignal(this.listId$, { initialValue: 0 });
 
   protected readonly list = toSignal(
     this.listId$.pipe(switchMap((id) => this.shoppingListService.getById(id))),
@@ -61,7 +63,7 @@ export class ShoppingListViewComponent {
     this.listId$.pipe(
       switchMap((id) => this.shoppingListService.getById(id)),
       switchMap((list) =>
-        list ? this.baseListTypeService.getById(list.listTypeId) : [undefined],
+        list ? this.baseListTypeService.getById(list.listTypeId) : of(undefined),
       ),
     ),
   );
@@ -74,11 +76,15 @@ export class ShoppingListViewComponent {
   protected readonly isMealItem = isMealItem;
 
   protected isSpecialCategory(categoryName: string): boolean {
-    if (!this.listType()?.hasMealCategories) {
-      return false;
-    }
+    return this.isIngredientsCategory(categoryName) || this.isMealsCategory(categoryName);
+  }
 
-    return categoryName === INGREDIENTS_CATEGORY_NAME || categoryName === MEALS_CATEGORY_NAME;
+  protected isIngredientsCategory(categoryName: string): boolean {
+    return Boolean(this.listType()?.hasMealCategories) && categoryName === INGREDIENTS_CATEGORY_NAME;
+  }
+
+  protected isMealsCategory(categoryName: string): boolean {
+    return Boolean(this.listType()?.hasMealCategories) && categoryName === MEALS_CATEGORY_NAME;
   }
 
   protected openAddDialog(categoryName: string): void {

@@ -66,8 +66,8 @@ export class ShoppingListService {
     return this.items.deleteItem(id);
   }
 
-  createFromBase(listTypeId: number, name?: string): Promise<number> {
-    return this.sessions.createFromBase(listTypeId, name);
+  createFromBase(listTypeId: number): Promise<number> {
+    return this.sessions.createFromBase(listTypeId);
   }
 
   updateItem(

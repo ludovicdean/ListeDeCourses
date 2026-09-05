@@ -13,6 +13,17 @@ export interface RepositoryOptions<T extends SqliteRow> {
   mapRow?: (row: SqliteRow) => T;
 }
 
+function bigintToNumber(value: bigint | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return undefined;
+  }
+  return num;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SqliteRepository {
   private readonly db = inject(SqliteDatabaseService);
@@ -32,12 +43,13 @@ export class SqliteRepository {
     const values = Object.values(record);
     const placeholders = columns.map(() => '?').join(', ');
 
-    const { rows } = await this.db.exec<{ id: number }>({
-      sql: `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id;`,
+    const { lastInsertRowId } = await this.db.exec({
+      sql: `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders});`,
       bind: values as BindableValue[],
+      lastInsertRowId: true,
     });
 
-    const id = rows[0]?.['id'];
+    const id = bigintToNumber(lastInsertRowId);
     if (typeof id !== 'number') {
       throw new Error(`Failed to insert into ${table}`);
     }

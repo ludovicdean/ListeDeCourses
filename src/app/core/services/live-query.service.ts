@@ -1,6 +1,6 @@
 import { Injectable, NgZone, inject } from '@angular/core';
-import { Observable, defer, switchMap } from 'rxjs';
-import { shareReplay } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import { shareReplay, skip } from 'rxjs/operators';
 
 import { SqliteDatabaseService } from '@core/database/sqlite-database.service';
 
@@ -14,24 +14,32 @@ export class LiveQueryService {
   private readonly db = inject(SqliteDatabaseService);
 
   observe<T>(querier: () => T | Promise<T>): Observable<T> {
-    return defer(() => Promise.resolve(querier())).pipe(
-      switchMap((initial) => {
-        return new Observable<T>((subscriber) => {
-          subscriber.next(initial);
+    return new Observable<T>((subscriber) => {
+      let active = true;
 
-          const subscription = this.db.changes$.subscribe(async () => {
-            try {
-              const value = await querier();
+      const runQuery = () => {
+        void Promise.resolve(querier()).then(
+          (value) => {
+            if (active) {
               this.zone.run(() => subscriber.next(value));
-            } catch (error) {
+            }
+          },
+          (error) => {
+            if (active) {
               this.zone.run(() => subscriber.error(error));
             }
-          });
+          },
+        );
+      };
 
-          return () => subscription.unsubscribe();
-        });
-      }),
-      shareReplay({ bufferSize: 1, refCount: true }),
-    );
+      runQuery();
+
+      const subscription = this.db.changes$.pipe(skip(1)).subscribe(() => runQuery());
+
+      return () => {
+        active = false;
+        subscription.unsubscribe();
+      };
+    }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
   }
 }
