@@ -43,11 +43,17 @@ export class ListTypeHubComponent {
     this.listTypeId$.pipe(
       switchMap((listTypeId) =>
         this.shoppingListService.watchListTypeHub(listTypeId).pipe(
-          map((data) => ({
-            listTypeId,
-            listType: data.listType,
-            sessions: data.sessions,
-          })),
+          map((data) => {
+            const activeSessions = data.sessions.filter((session) => session.status !== 'completed');
+            const completedSessions = data.sessions.filter((session) => session.status === 'completed');
+
+            return {
+              listTypeId,
+              listType: data.listType,
+              activeSessions,
+              completedSessions,
+            };
+          }),
         ),
       ),
     ),
@@ -55,7 +61,8 @@ export class ListTypeHubComponent {
       initialValue: {
         listTypeId: 0,
         listType: undefined,
-        sessions: [],
+        activeSessions: [],
+        completedSessions: [],
       },
     },
   );

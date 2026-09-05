@@ -30,19 +30,69 @@ export class BaseListTypeService {
   }
 
   async ensureDefaultTypes(): Promise<void> {
-    const rows = await this.repo.query<Record<string, unknown>>('SELECT COUNT(*) as count FROM baseListTypes;');
-    const count = Number(rows[0]?.['count'] ?? 0);
-    if (count > 0) {
-      return;
-    }
+    await this.deduplicateByName();
 
     for (const listType of DEFAULT_LIST_TYPES) {
+      const existing = await this.repo.get<Record<string, unknown>>(
+        'SELECT id FROM baseListTypes WHERE name = ? LIMIT 1;',
+        [listType.name],
+      );
+      if (existing) {
+        continue;
+      }
+
       await this.repo.insert('baseListTypes', {
         name: listType.name,
         orderIndex: listType.order,
         hasMealCategories: toSqliteBoolean(listType.hasMealCategories),
       });
     }
+  }
+
+  private async deduplicateByName(): Promise<void> {
+    const rows = await this.repo.query<Record<string, unknown>>(
+      'SELECT id, name FROM baseListTypes ORDER BY id;',
+    );
+
+    const idsByName = new Map<string, number[]>();
+    for (const row of rows) {
+      const name = String(row['name']);
+      const id = Number(row['id']);
+      const ids = idsByName.get(name) ?? [];
+      ids.push(id);
+      idsByName.set(name, ids);
+    }
+
+    for (const ids of idsByName.values()) {
+      if (ids.length <= 1) {
+        continue;
+      }
+
+      const keepId = ids[0];
+      const duplicateIds = ids.slice(1);
+
+      for (const duplicateId of duplicateIds) {
+        await this.repo.transaction(async () => {
+          await this.repo.exec({
+            sql: 'UPDATE baseCategories SET listTypeId = ? WHERE listTypeId = ?;',
+            bind: [keepId, duplicateId],
+          });
+          await this.repo.exec({
+            sql: 'UPDATE baseMeals SET listTypeId = ? WHERE listTypeId = ?;',
+            bind: [keepId, duplicateId],
+          });
+          await this.repo.exec({
+            sql: 'UPDATE shoppingLists SET listTypeId = ? WHERE listTypeId = ?;',
+            bind: [keepId, duplicateId],
+          });
+          await this.repo.delete('baseListTypes', duplicateId);
+        });
+      }
+    }
+
+    await this.repo.exec({
+      sql: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_list_types_name ON baseListTypes(name);',
+    });
   }
 
   async getWeeklyListTypeId(): Promise<number> {

@@ -4,22 +4,60 @@ import { filter, take } from 'rxjs/operators';
 
 import { sqlite3Worker1Promiser } from '@sqlite.org/sqlite-wasm';
 
-import { CREATE_SCHEMA_SQL } from './sqlite-schema';
+import { CREATE_SCHEMA_SQL, DB_FILENAME } from './sqlite-schema';
 
 export type SqliteRow = Record<string, unknown>;
 
 export interface SqliteExecOptions {
   sql: string;
   bind?: BindableValue[];
+  lastInsertRowId?: boolean;
 }
 
 export type BindableValue = string | number | boolean | null | undefined;
 
 export interface SqliteQueryResult<T = SqliteRow> {
   rows: T[];
+  lastInsertRowId?: bigint;
 }
 
-type Promiser = Awaited<ReturnType<typeof sqlite3Worker1Promiser.v2>>;
+type Promiser = Awaited<ReturnType<typeof sqlite3Worker1Promiser>>;
+
+type LoosePromiser = (type: string, args: unknown) => Promise<unknown>;
+
+function extractResultRows<T>(response: unknown): T[] {
+  const r = response as Record<string, unknown>;
+
+  if (Array.isArray(r['resultRows'])) {
+    return r['resultRows'] as T[];
+  }
+
+  const nestedResult = r['result'];
+  if (nestedResult && typeof nestedResult === 'object' && Array.isArray((nestedResult as Record<string, unknown>)['resultRows'])) {
+    return (nestedResult as Record<string, unknown>)['resultRows'] as T[];
+  }
+
+  return [];
+}
+
+function extractLastInsertRowId(response: unknown): bigint | undefined {
+  const r = response as Record<string, unknown>;
+
+  const topLevel = r['lastInsertRowId'];
+  if (typeof topLevel === 'bigint') {
+    return topLevel;
+  }
+
+  const nestedResult = r['result'];
+  if (nestedResult && typeof nestedResult === 'object') {
+    const nested = (nestedResult as Record<string, unknown>)['lastInsertRowId'];
+    if (typeof nested === 'bigint') {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
 
 @Injectable({ providedIn: 'root' })
 export class SqliteDatabaseService {
@@ -49,10 +87,13 @@ export class SqliteDatabaseService {
       throw new Error('Web Workers are not available in this environment.');
     }
 
-    this.promiser = await sqlite3Worker1Promiser.v2({
+    this.promiser = await sqlite3Worker1Promiser({
       worker: () => new Worker('/assets/sqlite-wasm/sqlite3-worker1.mjs', { type: 'module' }),
-      onready: () => {
-        console.log('SQLite worker ready');
+      onready: async (promiser) => {
+        await promiser('open', {
+          filename: DB_FILENAME,
+          vfs: 'opfs',
+        });
       },
     });
 
@@ -66,14 +107,20 @@ export class SqliteDatabaseService {
   async exec<T = SqliteRow>(options: SqliteExecOptions): Promise<SqliteQueryResult<T>> {
     await this.initialize();
 
-    const response = (await this.promiser!('exec', {
+    const execArgs = {
       sql: options.sql,
       bind: options.bind,
       rowMode: 'object',
       returnValue: 'resultRows',
-    })) as unknown as { resultRows: T[] };
+      lastInsertRowId: options.lastInsertRowId,
+    };
 
-    return { rows: response.resultRows ?? [] };
+    const rawResponse = await (this.promiser as unknown as LoosePromiser)('exec', execArgs);
+
+    return {
+      rows: extractResultRows<T>(rawResponse),
+      lastInsertRowId: extractLastInsertRowId(rawResponse),
+    };
   }
 
   async execMany(statements: SqliteExecOptions[]): Promise<void> {

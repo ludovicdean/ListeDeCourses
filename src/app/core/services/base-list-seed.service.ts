@@ -14,7 +14,18 @@ export class BaseListSeedService {
   private readonly shoppingListService = inject(ShoppingListService);
   private readonly repo = inject(SqliteRepository);
 
+  private seeding: Promise<void> | null = null;
+
   async seedIfEmpty(): Promise<void> {
+    if (this.seeding) {
+      return this.seeding;
+    }
+
+    this.seeding = this.doSeedIfEmpty();
+    return this.seeding;
+  }
+
+  private async doSeedIfEmpty(): Promise<void> {
     await this.baseListTypeService.ensureDefaultTypes();
 
     const listTypeRows = await this.repo.query<Record<string, unknown>>(

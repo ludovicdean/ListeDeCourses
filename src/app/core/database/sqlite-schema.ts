@@ -64,6 +64,7 @@ CREATE INDEX IF NOT EXISTS idx_products_category ON baseProducts(categoryId);
 CREATE INDEX IF NOT EXISTS idx_meals_list_type ON baseMeals(listTypeId);
 CREATE INDEX IF NOT EXISTS idx_items_list ON shoppingListItems(shoppingListId);
 CREATE INDEX IF NOT EXISTS idx_lists_type ON shoppingLists(listTypeId);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_list_types_name ON baseListTypes(name);
 `;
 
 export const MIGRATIONS_SQL = [

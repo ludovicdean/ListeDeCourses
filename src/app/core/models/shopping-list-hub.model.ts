@@ -6,6 +6,7 @@ export interface SessionCardData {
   name: string;
   createdAt: number;
   status: ShoppingListStatus;
+  selectedCount: number;
 }
 
 export interface ListTypeHubData {
