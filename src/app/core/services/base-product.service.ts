@@ -1,59 +1,132 @@
 import { Injectable, inject } from '@angular/core';
-import { type Observable } from 'rxjs';
+import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 
-import { mapBaseProduct } from '@core/database/sqlite-mappers';
-import { SqliteRepository } from '@core/database/sqlite.repository';
+import { mapSupabaseBaseProduct } from '@core/database/supabase-mapper';
 import type { BaseProduct, BaseProductInput } from '@core/models/base-product.model';
-import { LiveQueryService } from './live-query.service';
+import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseProductService {
-  private readonly liveQuery = inject(LiveQueryService);
-  private readonly repo = inject(SqliteRepository);
+  private readonly supabase = inject(SupabaseService);
+  private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   getByCategory(categoryId: number): Observable<BaseProduct[]> {
-    return this.liveQuery.observe(async () => {
-      const rows = await this.repo.query<Record<string, unknown>>(
-        'SELECT id, categoryId, name, quantity, orderIndex FROM baseProducts WHERE categoryId = ? ORDER BY orderIndex;',
-        [categoryId],
-      );
-      return rows.map(mapBaseProduct);
-    });
+    return this.refresh$.pipe(
+      switchMap(async () => {
+        const { data, error } = await this.supabase.supabase
+          .from('base_products')
+          .select('id, category_id, name, quantity, order_index')
+          .eq('user_id', this.supabase.userId)
+          .eq('category_id', categoryId)
+          .order('order_index');
+
+        if (error) {
+          throw error;
+        }
+
+        return (data ?? []).map(mapSupabaseBaseProduct);
+      }),
+    );
   }
 
   async create(input: BaseProductInput): Promise<number> {
-    return this.repo.insert('baseProducts', {
-      categoryId: input.categoryId,
-      name: input.name,
-      quantity: input.quantity,
-      orderIndex: input.order,
-    });
+    const { data, error } = await this.supabase.supabase
+      .from('base_products')
+      .insert({
+        user_id: this.supabase.userId,
+        category_id: input.categoryId,
+        name: input.name,
+        quantity: input.quantity ?? null,
+        order_index: input.order,
+      })
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      throw error ?? new Error('Impossible de créer le produit');
+    }
+
+    this.refresh();
+    return Number(data['id']);
   }
 
   async update(id: number, changes: Partial<BaseProductInput>): Promise<void> {
-    await this.repo.update('baseProducts', id, {
-      categoryId: changes.categoryId,
-      name: changes.name,
-      quantity: changes.quantity,
-      orderIndex: changes.order,
-    });
+    const payload: Record<string, unknown> = {};
+    if (changes.categoryId !== undefined) {
+      payload['category_id'] = changes.categoryId;
+    }
+    if (changes.name !== undefined) {
+      payload['name'] = changes.name;
+    }
+    if (changes.quantity !== undefined) {
+      payload['quantity'] = changes.quantity ?? null;
+    }
+    if (changes.order !== undefined) {
+      payload['order_index'] = changes.order;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    const { error } = await this.supabase.supabase
+      .from('base_products')
+      .update(payload)
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    this.refresh();
   }
 
   async delete(id: number): Promise<void> {
-    await this.repo.delete('baseProducts', id);
+    const { error } = await this.supabase.supabase
+      .from('base_products')
+      .delete()
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    this.refresh();
   }
 
   async getNextOrder(categoryId: number): Promise<number> {
-    const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT orderIndex FROM baseProducts WHERE categoryId = ? ORDER BY orderIndex DESC LIMIT 1;',
-      [categoryId],
-    );
-    const last = rows[0];
-    return (last ? Number(last['orderIndex']) : -1) + 1;
+    const { data, error } = await this.supabase.supabase
+      .from('base_products')
+      .select('order_index')
+      .eq('user_id', this.supabase.userId)
+      .eq('category_id', categoryId)
+      .order('order_index', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ? Number(data['order_index']) : -1) + 1;
   }
 
   async count(): Promise<number> {
-    const rows = await this.repo.query<Record<string, unknown>>('SELECT COUNT(*) as count FROM baseProducts;');
-    return Number(rows[0]?.['count'] ?? 0);
+    const { count, error } = await this.supabase.supabase
+      .from('base_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', this.supabase.userId);
+
+    if (error) {
+      throw error;
+    }
+
+    return count ?? 0;
+  }
+
+  private refresh(): void {
+    this.refresh$.next();
   }
 }

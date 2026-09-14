@@ -1,12 +1,10 @@
+# Variables à définir dans Netlify → Site configuration → Environment variables :
+#   SUPABASE_URL
+#   SUPABASE_ANON_KEY
+
 [build]
   command = "npm run build"
   publish = "dist/liste-de-courses/browser"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin"
-    Cross-Origin-Embedder-Policy = "require-corp"
 
 [[redirects]]
   from = "/*"

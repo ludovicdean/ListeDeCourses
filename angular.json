@@ -59,17 +59,18 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              },
-              {
-                "glob": "**/*",
-                "input": "node_modules/@sqlite.org/sqlite-wasm/dist",
-                "output": "assets/sqlite-wasm"
               }
             ],
             "styles": ["src/styles.scss"]
           },
           "configurations": {
             "production": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ],
               "budgets": [
                 {
                   "type": "initial",
@@ -95,12 +96,6 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": {
-            "headers": {
-              "Cross-Origin-Embedder-Policy": "require-corp",
-              "Cross-Origin-Opener-Policy": "same-origin"
-            }
-          },
           "configurations": {
             "production": {
               "buildTarget": "liste-de-courses:build:production"

@@ -1,22 +1,26 @@
 import { inject } from '@angular/core';
 import { type CanActivateFn, Router } from '@angular/router';
 
-import { SqliteRepository } from '@core/database/sqlite.repository';
 import { parsePositiveIntParam } from '@core/utils/parse-route-param';
+import { SupabaseService } from '@core/services/supabase.service';
 
 export const listTypeIdGuard: CanActivateFn = async (route) => {
   const router = inject(Router);
-  const repo = inject(SqliteRepository);
+  const supabase = inject(SupabaseService);
   const listTypeId = parsePositiveIntParam(route.paramMap.get('listTypeId'));
 
   if (listTypeId === null) {
     return router.createUrlTree(['/']);
   }
 
-  const row = await repo.get<Record<string, unknown>>('SELECT id FROM baseListTypes WHERE id = ?;', [
-    listTypeId,
-  ]);
-  if (!row) {
+  const { data } = await supabase.supabase
+    .from('base_list_types')
+    .select('id')
+    .eq('id', listTypeId)
+    .eq('user_id', supabase.userId)
+    .maybeSingle();
+
+  if (!data) {
     return router.createUrlTree(['/']);
   }
 
@@ -25,17 +29,21 @@ export const listTypeIdGuard: CanActivateFn = async (route) => {
 
 export const sessionIdGuard: CanActivateFn = async (route) => {
   const router = inject(Router);
-  const repo = inject(SqliteRepository);
+  const supabase = inject(SupabaseService);
   const sessionId = parsePositiveIntParam(route.paramMap.get('id'));
 
   if (sessionId === null) {
     return router.createUrlTree(['/']);
   }
 
-  const row = await repo.get<Record<string, unknown>>('SELECT id FROM shoppingLists WHERE id = ?;', [
-    sessionId,
-  ]);
-  if (!row) {
+  const { data } = await supabase.supabase
+    .from('shopping_lists')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('user_id', supabase.userId)
+    .maybeSingle();
+
+  if (!data) {
     return router.createUrlTree(['/']);
   }
 
@@ -44,7 +52,7 @@ export const sessionIdGuard: CanActivateFn = async (route) => {
 
 export const categoryIdGuard: CanActivateFn = async (route) => {
   const router = inject(Router);
-  const repo = inject(SqliteRepository);
+  const supabase = inject(SupabaseService);
   const listTypeId = parsePositiveIntParam(route.paramMap.get('listTypeId'));
   const categoryId = parsePositiveIntParam(route.paramMap.get('id'));
 
@@ -52,11 +60,14 @@ export const categoryIdGuard: CanActivateFn = async (route) => {
     return router.createUrlTree(['/']);
   }
 
-  const row = await repo.get<Record<string, unknown>>(
-    'SELECT listTypeId FROM baseCategories WHERE id = ?;',
-    [categoryId],
-  );
-  if (!row || Number(row['listTypeId']) !== listTypeId) {
+  const { data } = await supabase.supabase
+    .from('base_categories')
+    .select('list_type_id')
+    .eq('id', categoryId)
+    .eq('user_id', supabase.userId)
+    .maybeSingle();
+
+  if (!data || Number(data['list_type_id']) !== listTypeId) {
     return router.createUrlTree(['/base', listTypeId]);
   }
 
