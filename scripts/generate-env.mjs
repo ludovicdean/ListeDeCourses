@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,7 +41,7 @@ function writeEnvironmentFile(path, production, supabaseUrl, supabaseAnonKey) {
   supabaseAnonKey: '${escapeTsString(supabaseAnonKey)}',
 };
 `;
-
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, 'utf8');
 }
 
@@ -55,6 +55,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Copie .env.example vers .env et renseigne tes identifiants Supabase.');
   process.exit(1);
 }
+
+mkdirSync(envDir, { recursive: true });
 
 writeEnvironmentFile(join(envDir, 'environment.ts'), false, supabaseUrl, supabaseAnonKey);
 writeEnvironmentFile(join(envDir, 'environment.prod.ts'), true, supabaseUrl, supabaseAnonKey);
