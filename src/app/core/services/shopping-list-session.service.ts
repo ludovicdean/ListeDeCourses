@@ -7,8 +7,13 @@ import {
   NoSelectionError,
 } from '@core/errors/shopping-list.errors';
 import {
+  MEALS_CATEGORY_NAME,
+  MEALS_CATEGORY_ORDER,
+} from '@core/constants/special-categories';
+import {
   mapSupabaseBaseCategory,
   mapSupabaseBaseListType,
+  mapSupabaseBaseMeal,
   mapSupabaseBaseProduct,
   mapSupabaseShoppingList,
   mapSupabaseShoppingListItem,
@@ -180,7 +185,9 @@ export class ShoppingListSessionService {
       throw categoriesError;
     }
 
+    const listType = mapSupabaseBaseListType(listTypeRow);
     const categories = (categoryRows ?? []).map(mapSupabaseBaseCategory);
+    const mealsCategory = categories.find((category) => category.type === 'meals');
     const itemPayloads: Record<string, unknown>[] = [];
 
     for (const category of categories) {
@@ -214,6 +221,35 @@ export class ShoppingListSessionService {
           checked: false,
           picked_up: false,
           item_type: isIngredient ? 'ingredient' : 'product',
+        });
+      }
+    }
+
+    if (listType.hasMealCategories) {
+      const { data: mealRows, error: mealsError } = await this.supabase.supabase
+        .from('base_meals')
+        .select('id, list_type_id, name, recipe_url, order_index')
+        .eq('household_id', householdId)
+        .eq('list_type_id', listTypeId)
+        .order('order_index');
+
+      if (mealsError) {
+        throw mealsError;
+      }
+
+      for (const meal of (mealRows ?? []).map(mapSupabaseBaseMeal)) {
+        itemPayloads.push({
+          user_id: userId,
+          household_id: householdId,
+          category_name: MEALS_CATEGORY_NAME,
+          category_order: mealsCategory?.order ?? MEALS_CATEGORY_ORDER,
+          product_name: meal.name,
+          product_order: meal.order,
+          quantity: 1,
+          checked: false,
+          picked_up: false,
+          item_type: 'meal',
+          recipe_url: meal.recipeUrl ?? null,
         });
       }
     }

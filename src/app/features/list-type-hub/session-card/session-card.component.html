@@ -28,37 +28,46 @@
     </span>
   </button>
 
-  <button
-    type="button"
-    mat-icon-button
-    class="session-menu-trigger"
-    [matMenuTriggerFor]="menu"
-    aria-label="Actions de la session"
-    (click)="$event.stopPropagation()"
-  >
-    <mat-icon>more_vert</mat-icon>
-  </button>
-
-  <mat-menu #menu="matMenu">
-    <button mat-menu-item (click)="edit.emit()">
+  <div class="session-actions">
+    <button
+      type="button"
+      mat-icon-button
+      class="touch-target session-action"
+      aria-label="Modifier"
+      (click)="edit.emit(); $event.stopPropagation()"
+    >
       <mat-icon>edit</mat-icon>
-      <span>Modifier</span>
     </button>
     @if (data().status === 'preparing') {
-      <button mat-menu-item (click)="validate.emit()">
+      <button
+        type="button"
+        mat-icon-button
+        class="touch-target session-action"
+        aria-label="Passer en magasin"
+        (click)="validate.emit(); $event.stopPropagation()"
+      >
         <mat-icon>shopping_cart</mat-icon>
-        <span>Passer en magasin</span>
       </button>
     }
     @if (data().status === 'shopping') {
-      <button mat-menu-item (click)="complete.emit()">
+      <button
+        type="button"
+        mat-icon-button
+        class="touch-target session-action"
+        aria-label="Terminer les courses"
+        (click)="complete.emit(); $event.stopPropagation()"
+      >
         <mat-icon>done_all</mat-icon>
-        <span>Terminer les courses</span>
       </button>
     }
-    <button mat-menu-item class="menu-item--danger" (click)="remove.emit()">
+    <button
+      type="button"
+      mat-icon-button
+      class="touch-target session-action session-action--danger"
+      aria-label="Supprimer"
+      (click)="remove.emit(); $event.stopPropagation()"
+    >
       <mat-icon>delete</mat-icon>
-      <span>Supprimer</span>
     </button>
-  </mat-menu>
+  </div>
 </article>

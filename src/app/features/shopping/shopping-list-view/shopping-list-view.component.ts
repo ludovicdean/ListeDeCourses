@@ -21,7 +21,7 @@ import {
   MEALS_CATEGORY_NAME,
 } from '@core/constants/special-categories';
 import { isShoppingListError } from '@core/errors/shopping-list.errors';
-import { isMealItem, type ShoppingListItem } from '@core/models/shopping-list.model';
+import type { ShoppingListItem } from '@core/models/shopping-list.model';
 import { BaseListTypeService } from '@core/services/base-list-type.service';
 import { ConfirmService } from '@core/services/confirm.service';
 import { NotificationService } from '@core/services/notification.service';
@@ -69,22 +69,45 @@ export class ShoppingListViewComponent {
   );
 
   protected readonly groups = toSignal(
-    this.listId$.pipe(switchMap((id) => this.shoppingListService.getGroupedItems(id))),
+    this.listId$.pipe(
+      switchMap((id) =>
+        this.shoppingListService.getById(id).pipe(
+          switchMap((list) => this.shoppingListService.getGroupedItems(id, list?.status)),
+        ),
+      ),
+    ),
     { initialValue: [] },
   );
 
-  protected readonly isMealItem = isMealItem;
+  protected readonly meals = toSignal(
+    this.listId$.pipe(switchMap((id) => this.shoppingListService.getMealsForList(id))),
+    { initialValue: [] },
+  );
+
+  protected readonly MEALS_CATEGORY_NAME = MEALS_CATEGORY_NAME;
 
   protected isSpecialCategory(categoryName: string): boolean {
     return this.isIngredientsCategory(categoryName) || this.isMealsCategory(categoryName);
   }
 
   protected isIngredientsCategory(categoryName: string): boolean {
-    return Boolean(this.listType()?.hasMealCategories) && categoryName === INGREDIENTS_CATEGORY_NAME;
+    return categoryName === INGREDIENTS_CATEGORY_NAME;
   }
 
   protected isMealsCategory(categoryName: string): boolean {
-    return Boolean(this.listType()?.hasMealCategories) && categoryName === MEALS_CATEGORY_NAME;
+    return categoryName === MEALS_CATEGORY_NAME;
+  }
+
+  protected showMealsSection(): boolean {
+    if (this.meals().length > 0) {
+      return true;
+    }
+
+    return this.list()?.status === 'preparing' && Boolean(this.listType()?.hasMealCategories);
+  }
+
+  protected isSessionMeal(item: ShoppingListItem): boolean {
+    return item.id !== undefined;
   }
 
   protected hubBackLabel(): string {
@@ -211,6 +234,15 @@ export class ShoppingListViewComponent {
     if (confirmed) {
       await this.shoppingListService.updateStatus(listValue.id, 'completed');
     }
+  }
+
+  protected async reopenForEditing(): Promise<void> {
+    const listValue = this.list();
+    if (listValue?.id === undefined || listValue.status === 'preparing') {
+      return;
+    }
+
+    await this.shoppingListService.reopenForEditing(listValue.id);
   }
 
   private openIngredientDialog(listId: number, item?: ShoppingListItem): void {

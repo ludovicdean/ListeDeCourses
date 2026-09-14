@@ -6,7 +6,19 @@
     [backAriaLabel]="hubBackLabel()"
     [statusBadge]="statusLabel(listValue.status)"
     [statusClass]="listValue.status"
-  />
+  >
+    @if (listValue.status === 'shopping' || listValue.status === 'completed') {
+      <button
+        headerActions
+        mat-icon-button
+        class="touch-target"
+        aria-label="Revenir en préparation"
+        (click)="reopenForEditing()"
+      >
+        <mat-icon>edit</mat-icon>
+      </button>
+    }
+  </app-page-header>
 
   <div
     class="page page--with-sticky-footer"
@@ -26,7 +38,7 @@
     }
 
     @if (groups(); as groups) {
-      @if (groups.length === 0) {
+      @if (groups.length === 0 && !showMealsSection()) {
         @if (listValue.status === 'preparing') {
           <p class="empty-state empty-state--centered">Cette liste ne contient aucun produit.</p>
         } @else {
@@ -37,15 +49,9 @@
           <section
             class="category-section"
             [class.category-section--ingredients]="isIngredientsCategory(group.categoryName)"
-            [class.category-section--meals]="isMealsCategory(group.categoryName)"
           >
             <div class="category-header">
-              <h3 class="category-title">
-                @if (isMealsCategory(group.categoryName)) {
-                  <mat-icon class="category-icon" fontSet="material-icons">restaurant</mat-icon>
-                }
-                {{ group.categoryName }}
-              </h3>
+              <h3 class="category-title">{{ group.categoryName }}</h3>
               @if (listValue.status === 'preparing' && isSpecialCategory(group.categoryName)) {
                 <button
                   mat-icon-button
@@ -71,22 +77,14 @@
                         (change)="toggleSelected(item, $event.checked)"
                       />
                       <span matListItemTitle>{{ item.productName }}</span>
-                      @if (isMealItem(item) && item.recipeUrl) {
-                        <span matListItemLine>
-                          <a [href]="item.recipeUrl" target="_blank" rel="noopener noreferrer">Voir la recette</a>
-                        </span>
-                      } @else if (!isMealItem(item)) {
-                        <span matListItemLine>Quantité : {{ item.quantity }}</span>
-                      }
+                      <span matListItemLine>Quantité : {{ item.quantity }}</span>
                       <span matListItemMeta class="actions">
-                        @if (!isMealItem(item)) {
-                          <button mat-icon-button class="touch-target" aria-label="Diminuer" (click)="changeQuantity(item, -1)">
-                            <mat-icon>remove</mat-icon>
-                          </button>
-                          <button mat-icon-button class="touch-target" aria-label="Augmenter" (click)="changeQuantity(item, 1)">
-                            <mat-icon>add</mat-icon>
-                          </button>
-                        }
+                        <button mat-icon-button class="touch-target" aria-label="Diminuer" (click)="changeQuantity(item, -1)">
+                          <mat-icon>remove</mat-icon>
+                        </button>
+                        <button mat-icon-button class="touch-target" aria-label="Augmenter" (click)="changeQuantity(item, 1)">
+                          <mat-icon>add</mat-icon>
+                        </button>
                         @if (isSpecialCategory(group.categoryName)) {
                           <button mat-icon-button class="touch-target" aria-label="Modifier" (click)="openEditDialog(item)">
                             <mat-icon>edit</mat-icon>
@@ -106,17 +104,67 @@
                         (change)="togglePickedUp(item, $event.checked)"
                       />
                       <span matListItemTitle [class.picked-up]="item.pickedUp">{{ item.productName }}</span>
-                      @if (isMealItem(item) && item.recipeUrl) {
-                        <span matListItemLine [class.picked-up]="item.pickedUp">
-                          <a [href]="item.recipeUrl" target="_blank" rel="noopener noreferrer">Voir la recette</a>
-                        </span>
-                      } @else if (!isMealItem(item)) {
-                        <span matListItemLine [class.picked-up]="item.pickedUp">
-                          Quantité : {{ item.quantity }}
-                        </span>
-                      }
+                      <span matListItemLine [class.picked-up]="item.pickedUp">
+                        Quantité : {{ item.quantity }}
+                      </span>
                     </mat-list-item>
                   }
+                }
+              </mat-list>
+            }
+          </section>
+        }
+
+        @if (showMealsSection()) {
+          <section class="category-section category-section--meals">
+            <div class="category-header">
+              <h3 class="category-title">
+                <mat-icon class="category-icon" fontSet="material-icons">restaurant</mat-icon>
+                {{ MEALS_CATEGORY_NAME }}
+              </h3>
+              @if (listValue.status === 'preparing') {
+                <button
+                  mat-icon-button
+                  class="touch-target"
+                  [attr.aria-label]="'Ajouter dans ' + MEALS_CATEGORY_NAME"
+                  (click)="openAddDialog(MEALS_CATEGORY_NAME)"
+                >
+                  <mat-icon>add</mat-icon>
+                </button>
+              }
+            </div>
+
+            @if (meals().length === 0 && listValue.status === 'preparing') {
+              <p class="category-empty">Aucun repas. Appuyez sur + pour en ajouter.</p>
+            } @else {
+              <mat-list>
+                @for (meal of meals(); track meal.id ?? meal.productName) {
+                  <mat-list-item class="meal-list-item">
+                    <span matListItemIcon class="meal-bullet" aria-hidden="true">•</span>
+                    <span matListItemTitle class="meal-item__name">{{ meal.productName }}</span>
+                    @if (meal.recipeUrl) {
+                      <span matListItemLine>
+                        <a
+                          class="meal-item__recipe"
+                          [href]="meal.recipeUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Voir la recette
+                        </a>
+                      </span>
+                    }
+                    @if (listValue.status === 'preparing' && isSessionMeal(meal)) {
+                      <span matListItemMeta class="actions">
+                        <button mat-icon-button class="touch-target" aria-label="Modifier" (click)="openEditDialog(meal)">
+                          <mat-icon>edit</mat-icon>
+                        </button>
+                        <button mat-icon-button class="touch-target" aria-label="Supprimer" (click)="deleteItem(meal)">
+                          <mat-icon>delete</mat-icon>
+                        </button>
+                      </span>
+                    }
+                  </mat-list-item>
                 }
               </mat-list>
             }
@@ -137,7 +185,7 @@
     <div class="sticky-footer">
       <button mat-stroked-button class="sticky-footer__action" (click)="completeList()">
         <mat-icon>done_all</mat-icon>
-        Terminer les courses
+        Terminer
       </button>
     </div>
   }

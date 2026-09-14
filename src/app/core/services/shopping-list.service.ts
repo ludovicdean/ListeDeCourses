@@ -38,8 +38,15 @@ export class ShoppingListService {
     return this.sessions.countActiveByType(listTypeId);
   }
 
-  getGroupedItems(listId: number): Observable<ShoppingListCategoryGroup[]> {
-    return this.items.getGroupedItems(listId);
+  getGroupedItems(
+    listId: number,
+    status?: ShoppingListStatus,
+  ): Observable<ShoppingListCategoryGroup[]> {
+    return this.items.getGroupedItems(listId, status);
+  }
+
+  getMealsForList(listId: number): Observable<ShoppingListItem[]> {
+    return this.items.getMealsForList(listId);
   }
 
   ensureSessionNames(): Promise<void> {

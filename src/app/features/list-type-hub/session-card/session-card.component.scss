@@ -4,8 +4,8 @@
 
 .session-card {
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   padding: 12px;
   border-radius: 12px;
   background: var(--dev-surface-elevated);
@@ -73,9 +73,15 @@
   color: #15803d;
 }
 
-.session-menu-trigger {
+.session-actions {
+  display: flex;
   flex-shrink: 0;
-  margin: -4px -8px 0 0;
+  align-items: center;
+  gap: 2px;
+  margin-right: -8px;
+}
+
+.session-action {
   color: var(--dev-ink-muted);
 
   &:hover {
@@ -83,6 +89,8 @@
   }
 }
 
-.menu-item--danger {
-  color: #b3261e;
+.session-action--danger {
+  &:hover {
+    color: #b3261e;
+  }
 }

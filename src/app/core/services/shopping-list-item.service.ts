@@ -7,7 +7,10 @@ import {
   MEALS_CATEGORY_NAME,
   MEALS_CATEGORY_ORDER,
 } from '@core/constants/special-categories';
-import { mapSupabaseShoppingListItem } from '@core/database/supabase-mapper';
+import {
+  mapSupabaseBaseMeal,
+  mapSupabaseShoppingListItem,
+} from '@core/database/supabase-mapper';
 import type {
   ShoppingListCategoryGroup,
   ShoppingListItem,
@@ -22,7 +25,10 @@ export class ShoppingListItemService {
   private readonly householdService = inject(HouseholdService);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
-  getGroupedItems(listId: number): Observable<ShoppingListCategoryGroup[]> {
+  getGroupedItems(
+    listId: number,
+    statusOverride?: ShoppingListStatus,
+  ): Observable<ShoppingListCategoryGroup[]> {
     return this.refresh$.pipe(
       switchMap(async () => {
         const householdId = this.householdService.householdId;
@@ -54,7 +60,7 @@ export class ShoppingListItemService {
           hasMealCategories = Boolean(listTypeRow?.['has_meal_categories']);
         }
 
-        const status = listRow ? String(listRow['status']) : undefined;
+        const status = statusOverride ?? (listRow ? (String(listRow['status']) as ShoppingListStatus) : undefined);
 
         let query = this.supabase.supabase
           .from('shopping_list_items')
@@ -80,6 +86,10 @@ export class ShoppingListItemService {
         const groups = new Map<string, ShoppingListCategoryGroup>();
 
         for (const item of items) {
+          if (item.itemType === 'meal' || item.categoryName === MEALS_CATEGORY_NAME) {
+            continue;
+          }
+
           let group = groups.get(item.categoryName);
           if (!group) {
             group = {
@@ -97,6 +107,105 @@ export class ShoppingListItemService {
           status as ShoppingListStatus,
           hasMealCategories,
         );
+      }),
+    );
+  }
+
+  getMealsForList(listId: number): Observable<ShoppingListItem[]> {
+    return this.refresh$.pipe(
+      switchMap(async () => {
+        const householdId = this.householdService.householdId;
+
+        const { data: listRow, error: listError } = await this.supabase.supabase
+          .from('shopping_lists')
+          .select('list_type_id')
+          .eq('household_id', householdId)
+          .eq('id', listId)
+          .maybeSingle();
+
+        if (listError) {
+          throw listError;
+        }
+
+        if (!listRow) {
+          return [];
+        }
+
+        const listTypeId = Number(listRow['list_type_id']);
+
+        const { data: mealRows, error: mealsError } = await this.supabase.supabase
+          .from('shopping_list_items')
+          .select(
+            'id, shopping_list_id, category_name, category_order, product_name, product_order, quantity, checked, picked_up, item_type, recipe_url',
+          )
+          .eq('household_id', householdId)
+          .eq('shopping_list_id', listId)
+          .eq('item_type', 'meal')
+          .order('product_order');
+
+        if (mealsError) {
+          throw mealsError;
+        }
+
+        const sessionMeals = (mealRows ?? []).map(mapSupabaseShoppingListItem);
+        if (sessionMeals.length > 0) {
+          return sessionMeals;
+        }
+
+        const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
+          .from('base_list_types')
+          .select('has_meal_categories')
+          .eq('household_id', householdId)
+          .eq('id', listTypeId)
+          .maybeSingle();
+
+        if (listTypeError) {
+          throw listTypeError;
+        }
+
+        if (!listTypeRow || !Boolean(listTypeRow['has_meal_categories'])) {
+          return [];
+        }
+
+        const { data: baseMealRows, error: baseMealsError } = await this.supabase.supabase
+          .from('base_meals')
+          .select('id, list_type_id, name, recipe_url, order_index')
+          .eq('household_id', householdId)
+          .eq('list_type_id', listTypeId)
+          .order('order_index');
+
+        if (baseMealsError) {
+          throw baseMealsError;
+        }
+
+        const { data: mealsCategoryRow, error: mealsCategoryError } = await this.supabase.supabase
+          .from('base_categories')
+          .select('order_index')
+          .eq('household_id', householdId)
+          .eq('list_type_id', listTypeId)
+          .eq('type', 'meals')
+          .maybeSingle();
+
+        if (mealsCategoryError) {
+          throw mealsCategoryError;
+        }
+
+        const categoryOrder = mealsCategoryRow
+          ? Number(mealsCategoryRow['order_index'])
+          : MEALS_CATEGORY_ORDER;
+
+        return (baseMealRows ?? []).map(mapSupabaseBaseMeal).map((meal) => ({
+          shoppingListId: listId,
+          categoryName: MEALS_CATEGORY_NAME,
+          categoryOrder,
+          productName: meal.name,
+          productOrder: meal.order,
+          quantity: 1,
+          checked: false,
+          pickedUp: false,
+          itemType: 'meal' as const,
+          recipeUrl: meal.recipeUrl,
+        }));
       }),
     );
   }
@@ -236,19 +345,16 @@ export class ShoppingListItemService {
 
   private mergeSpecialCategoryGroups(
     groups: Map<string, ShoppingListCategoryGroup>,
-    _status: ShoppingListStatus | undefined,
+    status: ShoppingListStatus | undefined,
     hasMealCategories: boolean,
   ): ShoppingListCategoryGroup[] {
     const standard: ShoppingListCategoryGroup[] = [];
     let ingredients: ShoppingListCategoryGroup | undefined;
-    let meals: ShoppingListCategoryGroup | undefined;
 
     for (const group of groups.values()) {
       if (group.categoryName === INGREDIENTS_CATEGORY_NAME) {
         ingredients = group;
-      } else if (group.categoryName === MEALS_CATEGORY_NAME) {
-        meals = group;
-      } else {
+      } else if (group.categoryName !== MEALS_CATEGORY_NAME) {
         standard.push(group);
       }
     }
@@ -257,21 +363,14 @@ export class ShoppingListItemService {
 
     const result = [...standard];
 
-    if (hasMealCategories) {
-      result.push(
-        ingredients ?? {
-          categoryName: INGREDIENTS_CATEGORY_NAME,
-          categoryOrder: INGREDIENTS_CATEGORY_ORDER,
-          items: [],
-        },
-      );
-      result.push(
-        meals ?? {
-          categoryName: MEALS_CATEGORY_NAME,
-          categoryOrder: MEALS_CATEGORY_ORDER,
-          items: [],
-        },
-      );
+    if (ingredients?.items.length) {
+      result.push(ingredients);
+    } else if (status === 'preparing' && hasMealCategories) {
+      result.push({
+        categoryName: INGREDIENTS_CATEGORY_NAME,
+        categoryOrder: INGREDIENTS_CATEGORY_ORDER,
+        items: [],
+      });
     }
 
     return result;

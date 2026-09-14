@@ -53,6 +53,36 @@
   }
 }
 
+.meal-list-item {
+  --mat-list-list-item-leading-icon-start-space: 16px;
+  --mat-list-list-item-leading-icon-end-space: 12px;
+}
+
+.meal-bullet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--dev-accent-hover);
+}
+
+.meal-item__name {
+  font-weight: 500;
+}
+
+.meal-item__recipe {
+  font-size: 0.875rem;
+  color: var(--dev-accent-hover);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .category-title {
   display: flex;
   align-items: center;
@@ -80,3 +110,4 @@
   text-decoration: line-through;
   opacity: 0.6;
 }
+

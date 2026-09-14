@@ -1,3 +1,5 @@
+import { MEALS_CATEGORY_NAME } from '@core/constants/special-categories';
+
 export type ShoppingListStatus = 'preparing' | 'shopping' | 'completed';
 export type ShoppingListItemType = 'product' | 'ingredient' | 'meal';
 
@@ -30,5 +32,5 @@ export interface ShoppingListItem {
 }
 
 export function isMealItem(item: ShoppingListItem): boolean {
-  return item.itemType === 'meal';
+  return item.itemType === 'meal' || item.categoryName === MEALS_CATEGORY_NAME;
 }

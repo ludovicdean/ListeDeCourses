@@ -100,17 +100,6 @@ export class ListTypeHubComponent {
       return;
     }
 
-    const confirmed = await this.confirmService.confirm({
-      title: 'Revenir en préparation',
-      message:
-        'Revenir en mode préparation ? Vous pourrez ajouter ou modifier des produits. Les cases « pris en magasin » seront réinitialisées.',
-      confirmLabel: 'Revenir en préparation',
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
     await this.shoppingListService.reopenForEditing(sessionId);
     await this.router.navigate(['/list', sessionId]);
   }
