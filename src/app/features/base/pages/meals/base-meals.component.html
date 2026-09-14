@@ -1,41 +1,51 @@
-<mat-toolbar color="primary">
-  <a mat-icon-button [routerLink]="['/base', listTypeId()]" aria-label="Retour">
-    <mat-icon>arrow_back</mat-icon>
-  </a>
-  <span>Repas</span>
-  <span class="spacer"></span>
-  <button mat-icon-button aria-label="Ajouter un repas" (click)="openCreateDialog()">
-    <mat-icon>add</mat-icon>
-  </button>
-</mat-toolbar>
+@if (listType(); as type) {
+  <app-page-header
+    title="Repas"
+    [subtitle]="'Modèle — ' + type.name + ' › Catégories spéciales'"
+    [backLink]="['/base', type.id]"
+    backAriaLabel="Retour au modèle"
+  >
+    <button
+      headerActions
+      mat-icon-button
+      class="touch-target"
+      aria-label="Ajouter un repas"
+      (click)="openCreateDialog()"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+  </app-page-header>
 
-<p class="hint">
-  Planifiez vos repas avec un nom et, si vous le souhaitez, un lien vers la recette.
-</p>
+  <div class="page">
+    <p class="hint">
+      Planifiez vos repas avec un nom et, si vous le souhaitez, un lien vers la recette.
+    </p>
 
-@if (meals$ | async; as meals) {
-  @if (meals.length === 0) {
-    <p class="empty-state empty-state--centered">Aucun repas pour l'instant.</p>
-  } @else {
-    <mat-list>
-      @for (meal of meals; track meal.id) {
-        <mat-list-item>
-          <span matListItemTitle>{{ meal.name }}</span>
-          @if (meal.recipeUrl) {
-            <span matListItemLine>
-              <a [href]="meal.recipeUrl" target="_blank" rel="noopener noreferrer">Voir la recette</a>
-            </span>
+    @if (meals$ | async; as meals) {
+      @if (meals.length === 0) {
+        <p class="empty-state empty-state--centered">Aucun repas pour l'instant.</p>
+      } @else {
+        <mat-list>
+          @for (meal of meals; track meal.id) {
+            <mat-list-item>
+              <span matListItemTitle>{{ meal.name }}</span>
+              @if (meal.recipeUrl) {
+                <span matListItemLine>
+                  <a [href]="meal.recipeUrl" target="_blank" rel="noopener noreferrer">Voir la recette</a>
+                </span>
+              }
+              <span matListItemMeta class="actions">
+                <button mat-icon-button class="touch-target" aria-label="Modifier" (click)="openEditDialog(meal)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button class="touch-target" aria-label="Supprimer" (click)="deleteMeal(meal)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </span>
+            </mat-list-item>
           }
-          <span matListItemMeta class="actions">
-            <button mat-icon-button aria-label="Modifier" (click)="openEditDialog(meal)">
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button mat-icon-button aria-label="Supprimer" (click)="deleteMeal(meal)">
-              <mat-icon>delete</mat-icon>
-            </button>
-          </span>
-        </mat-list-item>
+        </mat-list>
       }
-    </mat-list>
-  }
+    }
+  </div>
 }

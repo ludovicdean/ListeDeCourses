@@ -5,9 +5,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { RouterLink } from '@angular/router';
 import { switchMap } from 'rxjs';
+
+import { PageHeaderComponent } from '@app/shared/page-header/page-header.component';
+import { BaseListTypeService } from '@core/services/base-list-type.service';
 
 import {
   NameDialogComponent,
@@ -24,8 +25,7 @@ import { routeParamNumber$, routeParamNumberSignal } from '@core/utils/route-par
   selector: 'app-base-category-detail',
   imports: [
     AsyncPipe,
-    RouterLink,
-    MatToolbarModule,
+    PageHeaderComponent,
     MatButtonModule,
     MatIconModule,
     MatListModule,
@@ -37,6 +37,7 @@ import { routeParamNumber$, routeParamNumberSignal } from '@core/utils/route-par
 })
 export class BaseCategoryDetailComponent {
   private readonly baseCategoryService = inject(BaseCategoryService);
+  private readonly baseListTypeService = inject(BaseListTypeService);
   private readonly baseProductService = inject(BaseProductService);
   private readonly dialog = inject(MatDialog);
   private readonly confirmService = inject(ConfirmService);
@@ -51,6 +52,21 @@ export class BaseCategoryDetailComponent {
   protected readonly category = toSignal(
     this.categoryId$.pipe(switchMap((id) => this.baseCategoryService.getById(id))),
   );
+
+  protected readonly listType = toSignal(
+    this.listTypeId$.pipe(switchMap((id) => this.baseListTypeService.getById(id))),
+  );
+
+  protected baseSubtitle(): string {
+    const typeName = this.listType()?.name;
+    const categoryName = this.category()?.name;
+    if (!typeName) {
+      return 'Catégories';
+    }
+    return categoryName
+      ? `Modèle — ${typeName} › Catégories › ${categoryName}`
+      : `Modèle — ${typeName} › Catégories`;
+  }
 
   protected readonly products$ = this.categoryId$.pipe(
     switchMap((id) => this.baseProductService.getByCategory(id)),

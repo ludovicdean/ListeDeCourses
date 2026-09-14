@@ -4,11 +4,13 @@ import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 import { mapSupabaseBaseCategory } from '@core/database/supabase-mapper';
 import type { BaseCategory, BaseCategoryInput } from '@core/models/base-category.model';
 import { isSpecialCategory } from '@core/models/base-category.model';
+import { HouseholdService } from './household.service';
 import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseCategoryService {
   private readonly supabase = inject(SupabaseService);
+  private readonly householdService = inject(HouseholdService);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   getStandardCategories(listTypeId: number): Observable<BaseCategory[]> {
@@ -17,7 +19,7 @@ export class BaseCategoryService {
         const { data, error } = await this.supabase.supabase
           .from('base_categories')
           .select('id, list_type_id, name, order_index, type')
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .eq('list_type_id', listTypeId)
           .eq('type', 'standard')
           .order('order_index');
@@ -37,7 +39,7 @@ export class BaseCategoryService {
         const { data, error } = await this.supabase.supabase
           .from('base_categories')
           .select('id, list_type_id, name, order_index, type')
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .eq('id', id)
           .maybeSingle();
 
@@ -56,7 +58,7 @@ export class BaseCategoryService {
         const { data, error } = await this.supabase.supabase
           .from('base_categories')
           .select('id, list_type_id, name, order_index, type')
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .eq('list_type_id', listTypeId)
           .eq('type', 'ingredients')
           .maybeSingle();
@@ -76,7 +78,7 @@ export class BaseCategoryService {
         const { data, error } = await this.supabase.supabase
           .from('base_categories')
           .select('id, list_type_id, name, order_index, type')
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .eq('list_type_id', listTypeId)
           .eq('type', 'meals')
           .maybeSingle();
@@ -95,6 +97,7 @@ export class BaseCategoryService {
       .from('base_categories')
       .insert({
         user_id: this.supabase.userId,
+        household_id: this.householdService.householdId,
         list_type_id: input.listTypeId,
         name: input.name,
         order_index: input.order,
@@ -115,7 +118,7 @@ export class BaseCategoryService {
     const { data: existing, error: fetchError } = await this.supabase.supabase
       .from('base_categories')
       .select('type')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id)
       .maybeSingle();
 
@@ -148,7 +151,7 @@ export class BaseCategoryService {
     const { error } = await this.supabase.supabase
       .from('base_categories')
       .update(payload)
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -162,7 +165,7 @@ export class BaseCategoryService {
     const { data: existing, error: fetchError } = await this.supabase.supabase
       .from('base_categories')
       .select('type')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id)
       .maybeSingle();
 
@@ -177,7 +180,7 @@ export class BaseCategoryService {
     const { error: productsError } = await this.supabase.supabase
       .from('base_products')
       .delete()
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('category_id', id);
 
     if (productsError) {
@@ -187,7 +190,7 @@ export class BaseCategoryService {
     const { error: categoryError } = await this.supabase.supabase
       .from('base_categories')
       .delete()
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (categoryError) {
@@ -201,7 +204,7 @@ export class BaseCategoryService {
     const { data, error } = await this.supabase.supabase
       .from('base_categories')
       .select('order_index')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('list_type_id', listTypeId)
       .eq('type', 'standard')
       .order('order_index', { ascending: false })

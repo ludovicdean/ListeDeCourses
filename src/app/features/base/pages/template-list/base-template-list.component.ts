@@ -5,9 +5,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatToolbarModule } from '@angular/material/toolbar';
 import { RouterLink } from '@angular/router';
 import { switchMap } from 'rxjs';
+
+import { PageHeaderComponent } from '@app/shared/page-header/page-header.component';
 
 import {
   NameDialogComponent,
@@ -25,7 +26,7 @@ import { routeParamNumber$ } from '@core/utils/route-param.utils';
   imports: [
     AsyncPipe,
     RouterLink,
-    MatToolbarModule,
+    PageHeaderComponent,
     MatButtonModule,
     MatIconModule,
     MatListModule,

@@ -3,11 +3,13 @@ import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 
 import { mapSupabaseBaseMeal } from '@core/database/supabase-mapper';
 import type { BaseMeal, BaseMealInput } from '@core/models/base-meal.model';
+import { HouseholdService } from './household.service';
 import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseMealService {
   private readonly supabase = inject(SupabaseService);
+  private readonly householdService = inject(HouseholdService);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   getMeals(listTypeId: number): Observable<BaseMeal[]> {
@@ -16,7 +18,7 @@ export class BaseMealService {
         const { data, error } = await this.supabase.supabase
           .from('base_meals')
           .select('id, list_type_id, name, recipe_url, order_index')
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .eq('list_type_id', listTypeId)
           .order('order_index');
 
@@ -34,6 +36,7 @@ export class BaseMealService {
       .from('base_meals')
       .insert({
         user_id: this.supabase.userId,
+        household_id: this.householdService.householdId,
         list_type_id: input.listTypeId,
         name: input.name,
         recipe_url: input.recipeUrl ?? null,
@@ -72,7 +75,7 @@ export class BaseMealService {
     const { error } = await this.supabase.supabase
       .from('base_meals')
       .update(payload)
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -86,7 +89,7 @@ export class BaseMealService {
     const { error } = await this.supabase.supabase
       .from('base_meals')
       .delete()
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -100,7 +103,7 @@ export class BaseMealService {
     const { data, error } = await this.supabase.supabase
       .from('base_meals')
       .select('order_index')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('list_type_id', listTypeId)
       .order('order_index', { ascending: false })
       .limit(1)
@@ -117,7 +120,7 @@ export class BaseMealService {
     const { count, error } = await this.supabase.supabase
       .from('base_meals')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('list_type_id', listTypeId);
 
     if (error) {

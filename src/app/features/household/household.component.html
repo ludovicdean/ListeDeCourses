@@ -1,0 +1,114 @@
+<app-page-header
+  title="Mon foyer"
+  subtitle="Partage et membres"
+  [backLink]="['/']"
+  backAriaLabel="Retour à l'accueil"
+/>
+
+<div class="page household-page">
+  @if (loading()) {
+    <p>Chargement…</p>
+  } @else {
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ householdName() }}</mat-card-title>
+        <mat-card-subtitle>Les listes sont partagées entre tous les membres.</mat-card-subtitle>
+      </mat-card-header>
+      @if (isOwner()) {
+        <mat-card-content>
+          <form [formGroup]="renameForm" (ngSubmit)="saveHouseholdName()" class="rename-form">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Nom du foyer</mat-label>
+              <input matInput formControlName="name" maxlength="60" />
+            </mat-form-field>
+            <button
+              mat-stroked-button
+              type="submit"
+              [disabled]="renameForm.invalid || renaming()"
+            >
+              {{ renaming() ? 'Enregistrement…' : 'Renommer' }}
+            </button>
+          </form>
+        </mat-card-content>
+      }
+    </mat-card>
+
+    <mat-card class="section">
+      <mat-card-header>
+        <mat-card-title>Membres</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @for (member of members(); track member.userId) {
+          <div class="member-row">
+            <div class="member-info">
+              <p class="member-name">{{ memberLabel(member) }}</p>
+              <p class="member-role">{{ roleLabel(member.role) }}</p>
+            </div>
+            @if (canRemoveMember(member)) {
+              <button
+                mat-stroked-button
+                type="button"
+                color="warn"
+                (click)="removeMember(member)"
+              >
+                Retirer
+              </button>
+            }
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    @if (isOwner()) {
+      <mat-card class="section">
+        <mat-card-header>
+          <mat-card-title>Inviter par email</mat-card-title>
+          <mat-card-subtitle>
+            La personne doit créer un compte ou se connecter avec cette adresse.
+          </mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <form [formGroup]="inviteForm" (ngSubmit)="sendInvite()">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Email</mat-label>
+              <input matInput type="email" formControlName="email" autocomplete="email" />
+            </mat-form-field>
+
+            <button
+              mat-flat-button
+              color="primary"
+              type="submit"
+              [disabled]="inviteForm.invalid || submitting()"
+            >
+              {{ submitting() ? 'Envoi…' : 'Envoyer l\'invitation' }}
+            </button>
+          </form>
+
+          @if (invites().length > 0) {
+            <h3 class="pending-title">Invitations en attente</h3>
+            <mat-list>
+              @for (invite of invites(); track invite.id) {
+                <mat-list-item>
+                  <span matListItemTitle>{{ invite.email }}</span>
+                  <span matListItemMeta class="actions">
+                    <button mat-button type="button" (click)="cancelInvite(invite.id)">
+                      Annuler
+                    </button>
+                  </span>
+                </mat-list-item>
+              }
+            </mat-list>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+
+    @if (errorMessage(); as error) {
+      <p class="error" role="alert">{{ error }}</p>
+    }
+
+    @if (successMessage(); as success) {
+      <p class="success" role="status">{{ success }}</p>
+    }
+  }
+</div>

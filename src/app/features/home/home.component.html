@@ -1,14 +1,6 @@
-<mat-toolbar color="primary">
-  <span>Listes de courses</span>
-  <span class="spacer"></span>
-  <button mat-icon-button aria-label="Déconnexion" (click)="signOut()">
-    <mat-icon>logout</mat-icon>
-  </button>
-</mat-toolbar>
+<app-page-header title="Listes de courses" [showAccountMenu]="true" />
 
 <div class="page">
-  <p class="intro">Choisissez le type de liste à utiliser.</p>
-
   @if (cards(); as cards) {
     <div class="cards">
       @for (card of cards; track card.id) {

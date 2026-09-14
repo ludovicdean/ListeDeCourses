@@ -6,9 +6,10 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { RouterLink } from '@angular/router';
 import { filter, of, switchMap } from 'rxjs';
+
+import { PageHeaderComponent } from '@app/shared/page-header/page-header.component';
+import type { ShoppingListStatus } from '@core/models/shopping-list.model';
 
 import {
   IngredientDialogComponent,
@@ -30,8 +31,7 @@ import { routeParamNumber$ } from '@core/utils/route-param.utils';
 @Component({
   selector: 'app-shopping-list-view',
   imports: [
-    RouterLink,
-    MatToolbarModule,
+    PageHeaderComponent,
     MatButtonModule,
     MatIconModule,
     MatListModule,
@@ -85,6 +85,22 @@ export class ShoppingListViewComponent {
 
   protected isMealsCategory(categoryName: string): boolean {
     return Boolean(this.listType()?.hasMealCategories) && categoryName === MEALS_CATEGORY_NAME;
+  }
+
+  protected hubBackLabel(): string {
+    const typeName = this.listType()?.name;
+    return typeName ? `Retour au hub ${typeName}` : 'Retour au hub';
+  }
+
+  protected statusLabel(status: ShoppingListStatus): string {
+    switch (status) {
+      case 'preparing':
+        return 'Préparation';
+      case 'shopping':
+        return 'En magasin';
+      case 'completed':
+        return 'Terminée';
+    }
   }
 
   protected openAddDialog(categoryName: string): void {

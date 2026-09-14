@@ -1,0 +1,71 @@
+:host {
+  display: block;
+}
+
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--dev-gradient-header) !important;
+  color: #fff;
+
+  --mat-toolbar-container-background-color: transparent;
+  --mat-toolbar-container-text-color: #fff;
+}
+
+.page-header .mat-mdc-icon-button,
+.page-header a.mat-mdc-icon-button {
+  color: #fff;
+
+  &:hover {
+    color: var(--dev-accent);
+  }
+}
+
+.title-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  opacity: 0.85;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dev-accent-muted);
+}
+
+.status-badge {
+  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.status-badge.preparing {
+  background: var(--dev-accent-light);
+  color: var(--dev-ink);
+}
+
+.status-badge.shopping {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-badge.completed {
+  background: #dcfce7;
+  color: #15803d;
+}

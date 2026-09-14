@@ -1,0 +1,26 @@
+<mat-toolbar color="primary" class="page-header">
+  @if (backLink(); as link) {
+    <a mat-icon-button [routerLink]="link" [attr.aria-label]="backAriaLabel()">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+  }
+
+  <div class="title-block">
+    <span class="title">{{ title() }}</span>
+    @if (subtitle(); as sub) {
+      <span class="subtitle">{{ sub }}</span>
+    }
+  </div>
+
+  @if (statusBadge(); as badge) {
+    <span class="status-badge" [class]="statusClass()">{{ badge }}</span>
+  }
+
+  <span class="spacer"></span>
+
+  <ng-content select="[headerActions]" />
+
+  @if (showAccountMenu()) {
+    <app-account-menu />
+  }
+</mat-toolbar>

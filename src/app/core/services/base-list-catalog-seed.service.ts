@@ -8,21 +8,24 @@ import {
   MEALS_CATEGORY_ORDER,
 } from '@core/constants/special-categories';
 import { BaseListTypeService } from './base-list-type.service';
+import { HouseholdService } from './household.service';
 import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseListCatalogSeedService {
   private readonly supabase = inject(SupabaseService);
+  private readonly householdService = inject(HouseholdService);
   private readonly listTypes = inject(BaseListTypeService);
 
   async ensureWeeklyCatalogIfEmpty(): Promise<void> {
     const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
     const weeklyListTypeId = await this.listTypes.getWeeklyListTypeId();
 
     const { count } = await this.supabase.supabase
       .from('base_categories')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('list_type_id', weeklyListTypeId)
       .eq('type', 'standard');
 
@@ -36,6 +39,7 @@ export class BaseListCatalogSeedService {
         .from('base_categories')
         .insert({
           user_id: userId,
+          household_id: householdId,
           list_type_id: weeklyListTypeId,
           name: categorySeed.name,
           order_index: categoryOrder,
@@ -50,6 +54,7 @@ export class BaseListCatalogSeedService {
 
       const products = categorySeed.products.map((name, productOrder) => ({
         user_id: userId,
+        household_id: householdId,
         category_id: category.id,
         name,
         order_index: productOrder,
@@ -69,6 +74,7 @@ export class BaseListCatalogSeedService {
 
   private async ensureSpecialCategories(listTypeId: number): Promise<void> {
     const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     for (const special of [
       { name: INGREDIENTS_CATEGORY_NAME, order: INGREDIENTS_CATEGORY_ORDER, type: 'ingredients' },
@@ -77,7 +83,7 @@ export class BaseListCatalogSeedService {
       const { data: existing } = await this.supabase.supabase
         .from('base_categories')
         .select('id')
-        .eq('user_id', userId)
+        .eq('household_id', householdId)
         .eq('list_type_id', listTypeId)
         .eq('type', special.type)
         .maybeSingle();
@@ -88,6 +94,7 @@ export class BaseListCatalogSeedService {
 
       const { error } = await this.supabase.supabase.from('base_categories').insert({
         user_id: userId,
+        household_id: householdId,
         list_type_id: listTypeId,
         name: special.name,
         order_index: special.order,

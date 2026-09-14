@@ -1,0 +1,14 @@
+<button mat-icon-button [matMenuTriggerFor]="accountMenu" aria-label="Menu compte" type="button">
+  <mat-icon>account_circle</mat-icon>
+</button>
+
+<mat-menu #accountMenu="matMenu">
+  <a mat-menu-item routerLink="/household">
+    <mat-icon>group</mat-icon>
+    <span>Mon foyer</span>
+  </a>
+  <button mat-menu-item type="button" (click)="signOut()">
+    <mat-icon>logout</mat-icon>
+    <span>Déconnexion</span>
+  </button>
+</mat-menu>

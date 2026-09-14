@@ -1,18 +1,14 @@
 @if (vm().listType; as type) {
-  <mat-toolbar color="primary">
-    <a mat-icon-button routerLink="/" aria-label="Accueil">
-      <mat-icon>arrow_back</mat-icon>
-    </a>
-    <span>{{ type.name }}</span>
-  </mat-toolbar>
+  <app-page-header
+    [title]="type.name"
+    subtitle="Sessions de courses"
+    [backLink]="['/']"
+    backAriaLabel="Retour à l'accueil"
+  />
 
-  <div class="page">
+  <div class="page page--with-sticky-footer">
     <mat-card class="actions-card">
       <mat-card-content>
-        <button mat-flat-button color="primary" class="main-action" (click)="createNewList(type.id!)">
-          <mat-icon>{{ getMeta(type.name).icon }}</mat-icon>
-          Préparer une liste
-        </button>
         <a mat-stroked-button class="secondary-action" [routerLink]="['/base', type.id]">
           <mat-icon>tune</mat-icon>
           Modifier la liste de base
@@ -60,5 +56,12 @@
         </div>
       </section>
     }
+  </div>
+
+  <div class="sticky-footer">
+    <button mat-flat-button color="primary" class="sticky-footer__action" (click)="createNewList(type.id!)">
+      <mat-icon>{{ getMeta(type.name).icon }}</mat-icon>
+      Préparer une liste
+    </button>
   </div>
 }

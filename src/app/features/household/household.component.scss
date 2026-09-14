@@ -1,0 +1,73 @@
+.household-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  mat-card {
+    border-left: 4px solid var(--dev-accent);
+    box-shadow: var(--dev-shadow-card);
+  }
+}
+
+.section {
+  margin-top: 0;
+}
+
+.rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.member-row:last-child {
+  border-bottom: none;
+}
+
+.member-info {
+  min-width: 0;
+}
+
+.member-name {
+  margin: 0;
+  font-weight: 500;
+}
+
+.member-role {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.full-width {
+  width: 100%;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.pending-title {
+  margin: 20px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.error {
+  color: #c62828;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.success {
+  color: #2e7d32;
+  font-size: 0.875rem;
+  margin: 0;
+}

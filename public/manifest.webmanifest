@@ -1,14 +1,14 @@
 {
   "name": "Liste de courses",
   "short_name": "Courses",
-  "theme_color": "#1976d2",
+  "theme_color": "#262626",
   "background_color": "#fafafa",
   "display": "standalone",
   "orientation": "portrait-primary",
   "scope": "./",
   "start_url": "./",
   "lang": "fr",
-  "description": "Gestion de listes de courses hors ligne",
+  "description": "Gestion de listes de courses partagées",
   "icons": [
     {
       "src": "icons/icon-72x72.png",

@@ -24,12 +24,14 @@ import {
   formatStoreSessionName,
   resolveUniqueStoreSessionIndex,
 } from '@core/utils/session-name.utils';
+import { HouseholdService } from './household.service';
 import { ShoppingListItemService } from './shopping-list-item.service';
 import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class ShoppingListSessionService {
   private readonly supabase = inject(SupabaseService);
+  private readonly householdService = inject(HouseholdService);
   private readonly items = inject(ShoppingListItemService);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
@@ -55,7 +57,7 @@ export class ShoppingListSessionService {
         const { count, error } = await this.supabase.supabase
           .from('shopping_lists')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .eq('list_type_id', listTypeId)
           .neq('status', 'completed');
 
@@ -74,11 +76,12 @@ export class ShoppingListSessionService {
 
   async ensureSessionNames(): Promise<void> {
     const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     const { data: typeRows, error: typesError } = await this.supabase.supabase
       .from('base_list_types')
       .select('id, name, order_index, has_meal_categories')
-      .eq('user_id', userId);
+      .eq('household_id', householdId);
 
     if (typesError) {
       throw typesError;
@@ -91,7 +94,7 @@ export class ShoppingListSessionService {
     const { data: listRows, error: listsError } = await this.supabase.supabase
       .from('shopping_lists')
       .select('id, list_type_id, name, created_at, status')
-      .eq('user_id', userId);
+      .eq('household_id', householdId);
 
     if (listsError) {
       throw listsError;
@@ -125,7 +128,7 @@ export class ShoppingListSessionService {
       const { error } = await this.supabase.supabase
         .from('shopping_lists')
         .update(payload)
-        .eq('user_id', userId)
+        .eq('household_id', householdId)
         .eq('id', normalized.id);
 
       if (error) {
@@ -138,11 +141,12 @@ export class ShoppingListSessionService {
 
   async createFromBase(listTypeId: number): Promise<number> {
     const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
       .from('base_list_types')
       .select('id, name, order_index, has_meal_categories')
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('id', listTypeId)
       .maybeSingle();
 
@@ -168,7 +172,7 @@ export class ShoppingListSessionService {
     const { data: categoryRows, error: categoriesError } = await this.supabase.supabase
       .from('base_categories')
       .select('id, list_type_id, name, order_index, type')
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('list_type_id', listTypeId)
       .order('order_index');
 
@@ -187,7 +191,7 @@ export class ShoppingListSessionService {
       const { data: productRows, error: productsError } = await this.supabase.supabase
         .from('base_products')
         .select('id, category_id, name, quantity, order_index')
-        .eq('user_id', userId)
+        .eq('household_id', householdId)
         .eq('category_id', category.id)
         .order('order_index');
 
@@ -201,6 +205,7 @@ export class ShoppingListSessionService {
 
         itemPayloads.push({
           user_id: userId,
+          household_id: householdId,
           category_name: category.name,
           category_order: category.order,
           product_name: product.name,
@@ -217,6 +222,7 @@ export class ShoppingListSessionService {
       .from('shopping_lists')
       .insert({
         user_id: userId,
+        household_id: householdId,
         list_type_id: listTypeId,
         name: listName,
         created_at: createdAt,
@@ -253,7 +259,7 @@ export class ShoppingListSessionService {
     const { count, error: countError } = await this.supabase.supabase
       .from('shopping_list_items')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('shopping_list_id', id)
       .eq('checked', true);
 
@@ -268,7 +274,7 @@ export class ShoppingListSessionService {
     const { error } = await this.supabase.supabase
       .from('shopping_lists')
       .update({ status: 'shopping' })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -283,7 +289,7 @@ export class ShoppingListSessionService {
     const { error: listError } = await this.supabase.supabase
       .from('shopping_lists')
       .update({ status: 'preparing' })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (listError) {
@@ -293,7 +299,7 @@ export class ShoppingListSessionService {
     const { error: itemsError } = await this.supabase.supabase
       .from('shopping_list_items')
       .update({ picked_up: false })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('shopping_list_id', id);
 
     if (itemsError) {
@@ -313,7 +319,7 @@ export class ShoppingListSessionService {
     const { error } = await this.supabase.supabase
       .from('shopping_lists')
       .update({ status })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -325,12 +331,12 @@ export class ShoppingListSessionService {
   }
 
   async delete(id: number): Promise<void> {
-    const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     const { error: itemsError } = await this.supabase.supabase
       .from('shopping_list_items')
       .delete()
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('shopping_list_id', id);
 
     if (itemsError) {
@@ -340,7 +346,7 @@ export class ShoppingListSessionService {
     const { error: listError } = await this.supabase.supabase
       .from('shopping_lists')
       .delete()
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('id', id);
 
     if (listError) {
@@ -352,12 +358,12 @@ export class ShoppingListSessionService {
   }
 
   private async loadListTypeHubData(listTypeId: number): Promise<ListTypeHubData> {
-    const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
       .from('base_list_types')
       .select('id, name, order_index, has_meal_categories')
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('id', listTypeId)
       .maybeSingle();
 
@@ -374,12 +380,12 @@ export class ShoppingListSessionService {
   }
 
   private async fetchSessionCardsByType(listTypeId: number): Promise<SessionCardData[]> {
-    const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     const { data: listTypeRow } = await this.supabase.supabase
       .from('base_list_types')
       .select('name')
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('id', listTypeId)
       .maybeSingle();
 
@@ -410,7 +416,7 @@ export class ShoppingListSessionService {
     const { data, error } = await this.supabase.supabase
       .from('shopping_list_items')
       .select('shopping_list_id')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('checked', true)
       .in('shopping_list_id', listIds);
 
@@ -434,7 +440,7 @@ export class ShoppingListSessionService {
     const { data, error } = await this.supabase.supabase
       .from('shopping_lists')
       .select('id, list_type_id, name, created_at, status')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('list_type_id', listTypeId)
       .order('created_at', { ascending: false });
 
@@ -449,7 +455,7 @@ export class ShoppingListSessionService {
     const { data, error } = await this.supabase.supabase
       .from('shopping_lists')
       .select('id, list_type_id, name, created_at, status')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id)
       .maybeSingle();
 
@@ -490,7 +496,7 @@ export class ShoppingListSessionService {
     const { error: completeError } = await this.supabase.supabase
       .from('shopping_lists')
       .update({ status: 'completed' })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', sessionId);
 
     if (completeError) {
@@ -510,6 +516,7 @@ export class ShoppingListSessionService {
     items: ShoppingListItem[],
   ): Promise<void> {
     const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
     const createdAt = Date.now();
     const listName = await this.buildUniqueStoreSessionName(
       sourceSession.listTypeId,
@@ -521,6 +528,7 @@ export class ShoppingListSessionService {
       .from('shopping_lists')
       .insert({
         user_id: userId,
+        household_id: householdId,
         list_type_id: sourceSession.listTypeId,
         name: listName,
         created_at: createdAt,
@@ -539,6 +547,7 @@ export class ShoppingListSessionService {
       const { error: itemsError } = await this.supabase.supabase.from('shopping_list_items').insert(
         items.map((item) => ({
           user_id: userId,
+          household_id: householdId,
           shopping_list_id: listId,
           category_name: item.categoryName,
           category_order: item.categoryOrder,
@@ -574,7 +583,7 @@ export class ShoppingListSessionService {
       .select(
         'id, shopping_list_id, category_name, category_order, product_name, product_order, quantity, checked, picked_up, item_type, recipe_url',
       )
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('shopping_list_id', listId)
       .eq('checked', true)
       .eq('picked_up', false)
@@ -594,7 +603,7 @@ export class ShoppingListSessionService {
       .select(
         'id, shopping_list_id, category_name, category_order, product_name, product_order, quantity, checked, picked_up, item_type, recipe_url',
       )
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('shopping_list_id', listId)
       .eq('item_type', 'meal')
       .order('category_order')
@@ -625,7 +634,7 @@ export class ShoppingListSessionService {
     const { data, error } = await this.supabase.supabase
       .from('shopping_lists')
       .select('id, list_type_id, name, created_at, status')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('list_type_id', listTypeId);
 
     if (error) {
@@ -639,12 +648,12 @@ export class ShoppingListSessionService {
   }
 
   private async isBaseEmpty(listTypeId: number): Promise<boolean> {
-    const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     const { data: categoryRows, error: categoriesError } = await this.supabase.supabase
       .from('base_categories')
       .select('id, type')
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('list_type_id', listTypeId);
 
     if (categoriesError) {
@@ -661,7 +670,7 @@ export class ShoppingListSessionService {
       const { count, error: productsError } = await this.supabase.supabase
         .from('base_products')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
+        .eq('household_id', householdId)
         .eq('category_id', category['id']);
 
       if (productsError) {
@@ -674,7 +683,7 @@ export class ShoppingListSessionService {
     const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
       .from('base_list_types')
       .select('has_meal_categories')
-      .eq('user_id', userId)
+      .eq('household_id', householdId)
       .eq('id', listTypeId)
       .maybeSingle();
 
@@ -686,7 +695,7 @@ export class ShoppingListSessionService {
       const { count, error: mealsError } = await this.supabase.supabase
         .from('base_meals')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
+        .eq('household_id', householdId)
         .eq('list_type_id', listTypeId);
 
       if (mealsError) {

@@ -1,37 +1,47 @@
-<mat-toolbar color="primary">
-  <a mat-icon-button [routerLink]="['/base', listTypeId()]" aria-label="Retour">
-    <mat-icon>arrow_back</mat-icon>
-  </a>
-  <span>Ingrédients Repas</span>
-  <span class="spacer"></span>
-  <button mat-icon-button aria-label="Ajouter un ingrédient" (click)="openCreateDialog()">
-    <mat-icon>add</mat-icon>
-  </button>
-</mat-toolbar>
+@if (listType(); as type) {
+  <app-page-header
+    title="Ingrédients Repas"
+    [subtitle]="'Modèle — ' + type.name + ' › Catégories spéciales'"
+    [backLink]="['/base', type.id]"
+    backAriaLabel="Retour au modèle"
+  >
+    <button
+      headerActions
+      mat-icon-button
+      class="touch-target"
+      aria-label="Ajouter un ingrédient"
+      (click)="openCreateDialog()"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+  </app-page-header>
 
-<p class="hint">
-  Ajoutez ici les ingrédients nécessaires à vos repas, avec une quantité libre (ex. 200, 1.5…).
-</p>
+  <div class="page">
+    <p class="hint">
+      Ajoutez ici les ingrédients nécessaires à vos repas, avec une quantité libre (ex. 200, 1.5…).
+    </p>
 
-@if (products$ | async; as products) {
-  @if (products.length === 0) {
-    <p class="empty-state empty-state--centered">Aucun ingrédient pour l'instant.</p>
-  } @else {
-    <mat-list>
-      @for (product of products; track product.id) {
-        <mat-list-item>
-          <span matListItemTitle>{{ product.name }}</span>
-          <span matListItemLine>Quantité : {{ product.quantity }}</span>
-          <span matListItemMeta class="actions">
-            <button mat-icon-button aria-label="Modifier" (click)="openEditDialog(product)">
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button mat-icon-button aria-label="Supprimer" (click)="deleteIngredient(product)">
-              <mat-icon>delete</mat-icon>
-            </button>
-          </span>
-        </mat-list-item>
+    @if (products$ | async; as products) {
+      @if (products.length === 0) {
+        <p class="empty-state empty-state--centered">Aucun ingrédient pour l'instant.</p>
+      } @else {
+        <mat-list>
+          @for (product of products; track product.id) {
+            <mat-list-item>
+              <span matListItemTitle>{{ product.name }}</span>
+              <span matListItemLine>Quantité : {{ product.quantity }}</span>
+              <span matListItemMeta class="actions">
+                <button mat-icon-button class="touch-target" aria-label="Modifier" (click)="openEditDialog(product)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button class="touch-target" aria-label="Supprimer" (click)="deleteIngredient(product)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </span>
+            </mat-list-item>
+          }
+        </mat-list>
       }
-    </mat-list>
-  }
+    }
+  </div>
 }

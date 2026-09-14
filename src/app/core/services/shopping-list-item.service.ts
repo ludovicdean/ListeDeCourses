@@ -13,22 +13,24 @@ import type {
   ShoppingListItem,
   ShoppingListStatus,
 } from '@core/models/shopping-list.model';
+import { HouseholdService } from './household.service';
 import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class ShoppingListItemService {
   private readonly supabase = inject(SupabaseService);
+  private readonly householdService = inject(HouseholdService);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   getGroupedItems(listId: number): Observable<ShoppingListCategoryGroup[]> {
     return this.refresh$.pipe(
       switchMap(async () => {
-        const userId = this.supabase.userId;
+        const householdId = this.householdService.householdId;
 
         const { data: listRow, error: listError } = await this.supabase.supabase
           .from('shopping_lists')
           .select('list_type_id, status')
-          .eq('user_id', userId)
+          .eq('household_id', householdId)
           .eq('id', listId)
           .maybeSingle();
 
@@ -41,7 +43,7 @@ export class ShoppingListItemService {
           const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
             .from('base_list_types')
             .select('has_meal_categories')
-            .eq('user_id', userId)
+            .eq('household_id', householdId)
             .eq('id', listRow['list_type_id'])
             .maybeSingle();
 
@@ -59,7 +61,7 @@ export class ShoppingListItemService {
           .select(
             'id, shopping_list_id, category_name, category_order, product_name, product_order, quantity, checked, picked_up, item_type, recipe_url',
           )
-          .eq('user_id', userId)
+          .eq('household_id', householdId)
           .eq('shopping_list_id', listId);
 
         if (status === 'shopping' || status === 'completed') {
@@ -106,6 +108,7 @@ export class ShoppingListItemService {
       .from('shopping_list_items')
       .insert({
         user_id: this.supabase.userId,
+        household_id: this.householdService.householdId,
         shopping_list_id: listId,
         category_name: INGREDIENTS_CATEGORY_NAME,
         category_order: INGREDIENTS_CATEGORY_ORDER,
@@ -134,6 +137,7 @@ export class ShoppingListItemService {
       .from('shopping_list_items')
       .insert({
         user_id: this.supabase.userId,
+        household_id: this.householdService.householdId,
         shopping_list_id: listId,
         category_name: MEALS_CATEGORY_NAME,
         category_order: MEALS_CATEGORY_ORDER,
@@ -160,7 +164,7 @@ export class ShoppingListItemService {
     const { error } = await this.supabase.supabase
       .from('shopping_list_items')
       .update({ product_name: name, quantity })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -174,7 +178,7 @@ export class ShoppingListItemService {
     const { error } = await this.supabase.supabase
       .from('shopping_list_items')
       .update({ product_name: name, recipe_url: recipeUrl ?? null })
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -188,7 +192,7 @@ export class ShoppingListItemService {
     const { error } = await this.supabase.supabase
       .from('shopping_list_items')
       .delete()
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -220,7 +224,7 @@ export class ShoppingListItemService {
     const { error } = await this.supabase.supabase
       .from('shopping_list_items')
       .update(payload)
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('id', id);
 
     if (error) {
@@ -277,7 +281,7 @@ export class ShoppingListItemService {
     const { data, error } = await this.supabase.supabase
       .from('shopping_list_items')
       .select('product_order')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('shopping_list_id', listId)
       .eq('category_name', categoryName)
       .order('product_order', { ascending: false })

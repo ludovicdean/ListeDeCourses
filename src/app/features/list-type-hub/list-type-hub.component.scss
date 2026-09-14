@@ -1,3 +1,8 @@
+.actions-card {
+  border-left: 4px solid var(--dev-accent-muted);
+  box-shadow: var(--dev-shadow-card);
+}
+
 .actions-card mat-card-content {
   display: flex;
   flex-direction: column;
@@ -5,17 +10,28 @@
   padding: 16px !important;
 }
 
-.main-action,
 .secondary-action {
   width: 100%;
   justify-content: center;
 }
 
+
 .sessions h2 {
   margin: 24px 0 8px;
   font-size: 0.95rem;
   font-weight: 600;
-  opacity: 0.8;
+  color: var(--dev-ink-soft);
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 1em;
+    margin-right: 8px;
+    border-radius: 2px;
+    background: var(--dev-accent);
+    vertical-align: -0.1em;
+  }
 }
 
 .sessions--completed h2 {

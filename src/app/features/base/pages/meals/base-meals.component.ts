@@ -1,13 +1,14 @@
 import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { RouterLink } from '@angular/router';
 import { switchMap } from 'rxjs';
+
+import { PageHeaderComponent } from '@app/shared/page-header/page-header.component';
+import { BaseListTypeService } from '@core/services/base-list-type.service';
 
 import { MealDialogComponent, type MealDialogResult } from '@features/base/dialogs/meal-dialog/meal-dialog.component';
 import type { BaseMeal } from '@core/models/base-meal.model';
@@ -19,8 +20,7 @@ import { routeParamNumber$, routeParamNumberSignal } from '@core/utils/route-par
   selector: 'app-base-meals',
   imports: [
     AsyncPipe,
-    RouterLink,
-    MatToolbarModule,
+    PageHeaderComponent,
     MatButtonModule,
     MatIconModule,
     MatListModule,
@@ -32,6 +32,7 @@ import { routeParamNumber$, routeParamNumberSignal } from '@core/utils/route-par
 })
 export class BaseMealsComponent {
   private readonly baseMealService = inject(BaseMealService);
+  private readonly baseListTypeService = inject(BaseListTypeService);
   private readonly dialog = inject(MatDialog);
   private readonly confirmService = inject(ConfirmService);
   private readonly destroyRef = inject(DestroyRef);
@@ -39,6 +40,10 @@ export class BaseMealsComponent {
   private readonly listTypeId$ = routeParamNumber$('listTypeId');
 
   protected readonly listTypeId = routeParamNumberSignal('listTypeId');
+
+  protected readonly listType = toSignal(
+    this.listTypeId$.pipe(switchMap((id) => this.baseListTypeService.getById(id))),
+  );
 
   protected readonly meals$ = this.listTypeId$.pipe(
     switchMap((listTypeId) => this.baseMealService.getMeals(listTypeId)),

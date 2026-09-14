@@ -4,11 +4,13 @@ import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 import { DEFAULT_LIST_TYPES } from '@core/constants/list-type.config';
 import { mapSupabaseBaseListType } from '@core/database/supabase-mapper';
 import type { BaseListType } from '@core/models/base-list-type.model';
+import { HouseholdService } from './household.service';
 import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseListTypeService {
   private readonly supabase = inject(SupabaseService);
+  private readonly householdService = inject(HouseholdService);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   readonly listTypes$: Observable<BaseListType[]> = this.refresh$.pipe(
@@ -22,7 +24,7 @@ export class BaseListTypeService {
           .from('base_list_types')
           .select('id, name, order_index, has_meal_categories')
           .eq('id', id)
-          .eq('user_id', this.supabase.userId)
+          .eq('household_id', this.householdService.householdId)
           .maybeSingle();
 
         if (error) {
@@ -36,12 +38,13 @@ export class BaseListTypeService {
 
   async ensureDefaultTypes(): Promise<void> {
     const userId = this.supabase.userId;
+    const householdId = this.householdService.householdId;
 
     for (const listType of DEFAULT_LIST_TYPES) {
       const { data: existing } = await this.supabase.supabase
         .from('base_list_types')
         .select('id')
-        .eq('user_id', userId)
+        .eq('household_id', householdId)
         .eq('name', listType.name)
         .maybeSingle();
 
@@ -51,6 +54,7 @@ export class BaseListTypeService {
 
       const { error } = await this.supabase.supabase.from('base_list_types').insert({
         user_id: userId,
+        household_id: householdId,
         name: listType.name,
         order_index: listType.order,
         has_meal_categories: listType.hasMealCategories,
@@ -68,7 +72,7 @@ export class BaseListTypeService {
     const { data, error } = await this.supabase.supabase
       .from('base_list_types')
       .select('id')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .eq('has_meal_categories', true)
       .order('order_index')
       .limit(1)
@@ -89,7 +93,7 @@ export class BaseListTypeService {
     const { data, error } = await this.supabase.supabase
       .from('base_list_types')
       .select('id, name, order_index, has_meal_categories')
-      .eq('user_id', this.supabase.userId)
+      .eq('household_id', this.householdService.householdId)
       .order('order_index');
 
     if (error) {

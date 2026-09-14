@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatToolbarModule } from '@angular/material/toolbar';
+import { PageHeaderComponent } from '@app/shared/page-header/page-header.component';
 import { map, switchMap } from 'rxjs';
 
 import { SessionCardComponent } from '@features/list-type-hub/session-card/session-card.component';
@@ -20,7 +20,7 @@ import { routeParamNumber$ } from '@core/utils/route-param.utils';
   selector: 'app-list-type-hub',
   imports: [
     RouterLink,
-    MatToolbarModule,
+    PageHeaderComponent,
     MatButtonModule,
     MatIconModule,
     MatCardModule,
@@ -119,6 +119,7 @@ export class ListTypeHubComponent {
     try {
       await this.shoppingListService.validateList(sessionId);
       this.notificationService.info('Liste prête pour le magasin.');
+      await this.router.navigate(['/list', sessionId]);
     } catch (error) {
       if (isShoppingListError(error)) {
         this.notificationService.error(error.message);
@@ -140,6 +141,7 @@ export class ListTypeHubComponent {
 
     if (confirmed) {
       await this.shoppingListService.updateStatus(sessionId, 'completed');
+      await this.router.navigate(['/list', sessionId]);
     }
   }
 

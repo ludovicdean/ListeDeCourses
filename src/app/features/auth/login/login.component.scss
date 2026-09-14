@@ -14,3 +14,31 @@
     font-size: 0.875rem;
     margin: 0 0 12px;
   }
+
+  .info {
+    color: #1565c0;
+    font-size: 0.875rem;
+    margin: 0 0 12px;
+  }
+
+  .mode-switch {
+    margin: 16px 0 0;
+    text-align: center;
+    font-size: 0.875rem;
+  }
+
+  .forgot-password-link {
+    margin: -4px 0 12px;
+    text-align: right;
+    font-size: 0.875rem;
+  }
+
+  .forgot-password-link a {
+    color: var(--dev-accent-hover);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .forgot-password-link a:hover {
+    text-decoration: underline;
+  }
