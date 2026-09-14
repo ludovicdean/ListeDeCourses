@@ -1,108 +1,101 @@
 import { Injectable, inject } from '@angular/core';
-import { type Observable } from 'rxjs';
+import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 
 import { DEFAULT_LIST_TYPES } from '@core/constants/list-type.config';
-import { mapBaseListType, toSqliteBoolean } from '@core/database/sqlite-mappers';
-import { SqliteRepository } from '@core/database/sqlite.repository';
+import { mapSupabaseBaseListType } from '@core/database/supabase-mapper';
 import type { BaseListType } from '@core/models/base-list-type.model';
-import { LiveQueryService } from './live-query.service';
+import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseListTypeService {
-  private readonly liveQuery = inject(LiveQueryService);
-  private readonly repo = inject(SqliteRepository);
+  private readonly supabase = inject(SupabaseService);
+  private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
-  readonly listTypes$: Observable<BaseListType[]> = this.liveQuery.observe(async () => {
-    const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, name, orderIndex, hasMealCategories FROM baseListTypes ORDER BY orderIndex;',
-    );
-    return rows.map(mapBaseListType);
-  });
+  readonly listTypes$: Observable<BaseListType[]> = this.refresh$.pipe(
+    switchMap(() => this.fetchListTypes()),
+  );
 
   getById(id: number): Observable<BaseListType | undefined> {
-    return this.liveQuery.observe(async () => {
-      const row = await this.repo.get<Record<string, unknown>>(
-        'SELECT id, name, orderIndex, hasMealCategories FROM baseListTypes WHERE id = ?;',
-        [id],
-      );
-      return row ? mapBaseListType(row) : undefined;
-    });
+    return this.refresh$.pipe(
+      switchMap(async () => {
+        const { data, error } = await this.supabase.supabase
+          .from('base_list_types')
+          .select('id, name, order_index, has_meal_categories')
+          .eq('id', id)
+          .eq('user_id', this.supabase.userId)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        return data ? mapSupabaseBaseListType(data) : undefined;
+      }),
+    );
   }
 
   async ensureDefaultTypes(): Promise<void> {
-    await this.deduplicateByName();
+    const userId = this.supabase.userId;
 
     for (const listType of DEFAULT_LIST_TYPES) {
-      const existing = await this.repo.get<Record<string, unknown>>(
-        'SELECT id FROM baseListTypes WHERE name = ? LIMIT 1;',
-        [listType.name],
-      );
+      const { data: existing } = await this.supabase.supabase
+        .from('base_list_types')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', listType.name)
+        .maybeSingle();
+
       if (existing) {
         continue;
       }
 
-      await this.repo.insert('baseListTypes', {
+      const { error } = await this.supabase.supabase.from('base_list_types').insert({
+        user_id: userId,
         name: listType.name,
-        orderIndex: listType.order,
-        hasMealCategories: toSqliteBoolean(listType.hasMealCategories),
+        order_index: listType.order,
+        has_meal_categories: listType.hasMealCategories,
       });
-    }
-  }
 
-  private async deduplicateByName(): Promise<void> {
-    const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, name FROM baseListTypes ORDER BY id;',
-    );
-
-    const idsByName = new Map<string, number[]>();
-    for (const row of rows) {
-      const name = String(row['name']);
-      const id = Number(row['id']);
-      const ids = idsByName.get(name) ?? [];
-      ids.push(id);
-      idsByName.set(name, ids);
-    }
-
-    for (const ids of idsByName.values()) {
-      if (ids.length <= 1) {
-        continue;
-      }
-
-      const keepId = ids[0];
-      const duplicateIds = ids.slice(1);
-
-      for (const duplicateId of duplicateIds) {
-        await this.repo.transaction(async () => {
-          await this.repo.exec({
-            sql: 'UPDATE baseCategories SET listTypeId = ? WHERE listTypeId = ?;',
-            bind: [keepId, duplicateId],
-          });
-          await this.repo.exec({
-            sql: 'UPDATE baseMeals SET listTypeId = ? WHERE listTypeId = ?;',
-            bind: [keepId, duplicateId],
-          });
-          await this.repo.exec({
-            sql: 'UPDATE shoppingLists SET listTypeId = ? WHERE listTypeId = ?;',
-            bind: [keepId, duplicateId],
-          });
-          await this.repo.delete('baseListTypes', duplicateId);
-        });
+      if (error) {
+        throw error;
       }
     }
 
-    await this.repo.exec({
-      sql: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_list_types_name ON baseListTypes(name);',
-    });
+    this.refresh();
   }
 
   async getWeeklyListTypeId(): Promise<number> {
-    const row = await this.repo.get<Record<string, unknown>>(
-      'SELECT id FROM baseListTypes WHERE hasMealCategories = 1 ORDER BY orderIndex LIMIT 1;',
-    );
-    if (!row?.['id']) {
+    const { data, error } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('id')
+      .eq('user_id', this.supabase.userId)
+      .eq('has_meal_categories', true)
+      .order('order_index')
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.['id']) {
       throw new Error('WEEKLY_LIST_TYPE_MISSING');
     }
 
-    return Number(row['id']);
+    return Number(data['id']);
+  }
+
+  private refresh(): void {
+    this.refresh$.next();
+  }
+
+  private async fetchListTypes(): Promise<BaseListType[]> {
+    const { data, error } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('id, name, order_index, has_meal_categories')
+      .eq('user_id', this.supabase.userId)
+      .order('order_index');
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(mapSupabaseBaseListType);
   }
 }

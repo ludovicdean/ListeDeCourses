@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { type Observable, shareReplay } from 'rxjs';
+import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 
 import {
   BaseEmptyError,
@@ -7,20 +7,14 @@ import {
   NoSelectionError,
 } from '@core/errors/shopping-list.errors';
 import {
-  mapBaseCategory,
-  mapBaseListType,
-  mapBaseMeal,
-  mapShoppingList,
-  mapShoppingListItem,
-  toSqliteBoolean,
-} from '@core/database/sqlite-mappers';
-import { SqliteRepository } from '@core/database/sqlite.repository';
+  mapSupabaseBaseCategory,
+  mapSupabaseBaseListType,
+  mapSupabaseBaseProduct,
+  mapSupabaseShoppingList,
+  mapSupabaseShoppingListItem,
+} from '@core/database/supabase-mapper';
 import type { BaseListType } from '@core/models/base-list-type.model';
 import type { ListTypeHubData, SessionCardData } from '@core/models/shopping-list-hub.model';
-import {
-  MEALS_CATEGORY_NAME,
-  MEALS_CATEGORY_ORDER,
-} from '@core/constants/special-categories';
 import type { ShoppingList, ShoppingListItem, ShoppingListStatus } from '@core/models/shopping-list.model';
 import {
   LIDL_SESSION_PREFIX,
@@ -30,26 +24,17 @@ import {
   formatStoreSessionName,
   resolveUniqueStoreSessionIndex,
 } from '@core/utils/session-name.utils';
-import { LiveQueryService } from './live-query.service';
+import { ShoppingListItemService } from './shopping-list-item.service';
+import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class ShoppingListSessionService {
-  private readonly liveQuery = inject(LiveQueryService);
-  private readonly repo = inject(SqliteRepository);
-  private readonly sessionByIdStreams = new Map<number, Observable<ShoppingList | undefined>>();
+  private readonly supabase = inject(SupabaseService);
+  private readonly items = inject(ShoppingListItemService);
+  private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   getById(id: number): Observable<ShoppingList | undefined> {
-    const existing = this.sessionByIdStreams.get(id);
-    if (existing) {
-      return existing;
-    }
-
-    const stream = this.liveQuery
-      .observe(() => this.loadSessionById(id))
-      .pipe(shareReplay({ bufferSize: 1, refCount: true }));
-
-    this.sessionByIdStreams.set(id, stream);
-    return stream;
+    return this.refresh$.pipe(switchMap(() => this.loadSessionById(id)));
   }
 
   async getSessionById(id: number): Promise<ShoppingList | undefined> {
@@ -57,48 +42,62 @@ export class ShoppingListSessionService {
   }
 
   watchListTypeHub(listTypeId: number): Observable<ListTypeHubData> {
-    return this.liveQuery.observe(() => this.loadListTypeHubData(listTypeId));
+    return this.refresh$.pipe(switchMap(() => this.loadListTypeHubData(listTypeId)));
   }
 
   countActiveByType(listTypeId: number): Observable<number> {
-    return this.liveQuery.observe(async () => {
-      if (!Number.isFinite(listTypeId) || listTypeId <= 0) {
-        return 0;
-      }
+    return this.refresh$.pipe(
+      switchMap(async () => {
+        if (!Number.isFinite(listTypeId) || listTypeId <= 0) {
+          return 0;
+        }
 
-      const rows = await this.repo.query<Record<string, unknown>>(
-        'SELECT COUNT(*) as count FROM shoppingLists WHERE listTypeId = ? AND status != ?;',
-        [listTypeId, 'completed'],
-      );
-      return Number(rows[0]?.['count'] ?? 0);
-    });
+        const { count, error } = await this.supabase.supabase
+          .from('shopping_lists')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', this.supabase.userId)
+          .eq('list_type_id', listTypeId)
+          .neq('status', 'completed');
+
+        if (error) {
+          throw error;
+        }
+
+        return count ?? 0;
+      }),
+    );
   }
 
-  async normalizeShoppingLists(fallbackWeeklyListTypeId: number): Promise<void> {
-    await this.repo.exec({
-      sql: 'UPDATE shoppingLists SET listTypeId = ? WHERE listTypeId NOT IN (SELECT id FROM baseListTypes);',
-      bind: [fallbackWeeklyListTypeId],
-    });
+  async normalizeShoppingLists(_fallbackWeeklyListTypeId: number): Promise<void> {
+    // No-op with Supabase: list_type_id integrity is enforced by the database.
   }
 
   async ensureSessionNames(): Promise<void> {
-    const typeRows = await this.repo.query<Record<string, unknown>>('SELECT id, name FROM baseListTypes;');
+    const userId = this.supabase.userId;
+
+    const { data: typeRows, error: typesError } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('id, name, order_index, has_meal_categories')
+      .eq('user_id', userId);
+
+    if (typesError) {
+      throw typesError;
+    }
+
     const typeById = new Map<number, BaseListType>(
-      typeRows.map((row) => [Number(row['id']), mapBaseListType(row)]),
+      (typeRows ?? []).map((row) => [Number(row['id']), mapSupabaseBaseListType(row)]),
     );
 
-    const listRows = await this.repo.query<Record<string, unknown>>('SELECT id FROM shoppingLists;');
+    const { data: listRows, error: listsError } = await this.supabase.supabase
+      .from('shopping_lists')
+      .select('id, list_type_id, name, created_at, status')
+      .eq('user_id', userId);
 
-    for (const rawRow of listRows) {
-      const id = Number(rawRow['id']);
-      const row = await this.repo.get<Record<string, unknown>>(
-        'SELECT id, listTypeId, name, createdAt, status FROM shoppingLists WHERE id = ?;',
-        [id],
-      );
-      if (!row) {
-        continue;
-      }
+    if (listsError) {
+      throw listsError;
+    }
 
+    for (const row of listRows ?? []) {
       const normalized = this.normalizeSession(row);
       const listTypeId = Number(normalized.listTypeId);
       if (!Number.isFinite(listTypeId)) {
@@ -106,145 +105,203 @@ export class ShoppingListSessionService {
       }
 
       const listType = typeById.get(listTypeId);
-
       const needsName = !extractSessionName(normalized);
       const needsTypeId = listType !== undefined && normalized.listTypeId !== listTypeId;
 
-      if (needsName || needsTypeId) {
-        const createdAt = normalized.createdAt;
-        const existingNames = await this.fetchExistingSessionNames(listTypeId, id);
-        const index = resolveUniqueStoreSessionIndex(existingNames, LIDL_SESSION_PREFIX, createdAt);
-        const uniqueName = formatStoreSessionName(LIDL_SESSION_PREFIX, createdAt, index);
+      if (!needsName && !needsTypeId) {
+        continue;
+      }
 
-        await this.repo.update('shoppingLists', id, {
-          name: uniqueName,
-          ...(needsTypeId ? { listTypeId } : {}),
-        });
+      const createdAt = normalized.createdAt;
+      const existingNames = await this.fetchExistingSessionNames(listTypeId, normalized.id);
+      const index = resolveUniqueStoreSessionIndex(existingNames, LIDL_SESSION_PREFIX, createdAt);
+      const uniqueName = formatStoreSessionName(LIDL_SESSION_PREFIX, createdAt, index);
+
+      const payload: Record<string, unknown> = { name: uniqueName };
+      if (needsTypeId) {
+        payload['list_type_id'] = listTypeId;
+      }
+
+      const { error } = await this.supabase.supabase
+        .from('shopping_lists')
+        .update(payload)
+        .eq('user_id', userId)
+        .eq('id', normalized.id);
+
+      if (error) {
+        throw error;
       }
     }
+
+    this.refresh();
   }
 
   async createFromBase(listTypeId: number): Promise<number> {
-    const listTypeRow = await this.repo.get<Record<string, unknown>>(
-      'SELECT id, name, orderIndex, hasMealCategories FROM baseListTypes WHERE id = ?;',
-      [listTypeId],
-    );
+    const userId = this.supabase.userId;
+
+    const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('id, name, order_index, has_meal_categories')
+      .eq('user_id', userId)
+      .eq('id', listTypeId)
+      .maybeSingle();
+
+    if (listTypeError) {
+      throw listTypeError;
+    }
+
     if (!listTypeRow) {
       throw new ListTypeNotFoundError();
     }
-
-    const listType = mapBaseListType(listTypeRow);
 
     if (await this.isBaseEmpty(listTypeId)) {
       throw new BaseEmptyError();
     }
 
+    const createdAt = Date.now();
     const listName = await this.buildUniqueStoreSessionName(
       listTypeId,
       LIDL_SESSION_PREFIX,
-      Date.now(),
+      createdAt,
     );
 
-    const categoryRows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, listTypeId, name, orderIndex, type FROM baseCategories WHERE listTypeId = ? ORDER BY orderIndex;',
-      [listTypeId],
-    );
-    const categories = categoryRows.map(mapBaseCategory);
-    const mealsCategory = categories.find((category) => category.type === 'meals');
+    const { data: categoryRows, error: categoriesError } = await this.supabase.supabase
+      .from('base_categories')
+      .select('id, list_type_id, name, order_index, type')
+      .eq('user_id', userId)
+      .eq('list_type_id', listTypeId)
+      .order('order_index');
 
-    let listId: number | undefined;
-
-    await this.repo.transaction(async () => {
-      listId = await this.repo.insert('shoppingLists', {
-        listTypeId,
-        name: listName,
-        createdAt: Date.now(),
-        status: 'preparing',
-      });
-
-      for (const category of categories) {
-        if (category.id === undefined || category.type === 'meals') {
-          continue;
-        }
-
-        const productRows = await this.repo.query<Record<string, unknown>>(
-          'SELECT id, categoryId, name, quantity, orderIndex FROM baseProducts WHERE categoryId = ? ORDER BY orderIndex;',
-          [category.id],
-        );
-
-        for (const productRow of productRows) {
-          const isIngredient = category.type === 'ingredients';
-          const quantity = productRow['quantity'] === null ? 1 : Number(productRow['quantity']);
-
-          await this.repo.insert('shoppingListItems', {
-            shoppingListId: listId,
-            categoryName: category.name,
-            categoryOrder: category.order,
-            productName: String(productRow['name']),
-            productOrder: Number(productRow['orderIndex']),
-            quantity: isIngredient ? quantity : 1,
-            checked: 0,
-            pickedUp: 0,
-            itemType: isIngredient ? 'ingredient' : 'product',
-          });
-        }
-      }
-
-      if (listType.hasMealCategories) {
-        const mealRows = await this.repo.query<Record<string, unknown>>(
-          'SELECT id, listTypeId, name, recipeUrl, orderIndex FROM baseMeals WHERE listTypeId = ? ORDER BY orderIndex;',
-          [listTypeId],
-        );
-        const meals = mealRows.map(mapBaseMeal);
-
-        for (const meal of meals) {
-          await this.repo.insert('shoppingListItems', {
-            shoppingListId: listId,
-            categoryName: MEALS_CATEGORY_NAME,
-            categoryOrder: mealsCategory?.order ?? MEALS_CATEGORY_ORDER,
-            productName: meal.name,
-            productOrder: meal.order,
-            quantity: 1,
-            checked: 0,
-            pickedUp: 0,
-            itemType: 'meal',
-            recipeUrl: meal.recipeUrl,
-          });
-        }
-      }
-    });
-
-    if (listId === undefined) {
-      throw new Error('Failed to create shopping list');
+    if (categoriesError) {
+      throw categoriesError;
     }
 
+    const categories = (categoryRows ?? []).map(mapSupabaseBaseCategory);
+    const itemPayloads: Record<string, unknown>[] = [];
+
+    for (const category of categories) {
+      if (category.id === undefined || category.type === 'meals') {
+        continue;
+      }
+
+      const { data: productRows, error: productsError } = await this.supabase.supabase
+        .from('base_products')
+        .select('id, category_id, name, quantity, order_index')
+        .eq('user_id', userId)
+        .eq('category_id', category.id)
+        .order('order_index');
+
+      if (productsError) {
+        throw productsError;
+      }
+
+      for (const product of (productRows ?? []).map(mapSupabaseBaseProduct)) {
+        const isIngredient = category.type === 'ingredients';
+        const quantity = product.quantity ?? 1;
+
+        itemPayloads.push({
+          user_id: userId,
+          category_name: category.name,
+          category_order: category.order,
+          product_name: product.name,
+          product_order: product.order,
+          quantity: isIngredient ? quantity : 1,
+          checked: false,
+          picked_up: false,
+          item_type: isIngredient ? 'ingredient' : 'product',
+        });
+      }
+    }
+
+    const { data: listRow, error: listError } = await this.supabase.supabase
+      .from('shopping_lists')
+      .insert({
+        user_id: userId,
+        list_type_id: listTypeId,
+        name: listName,
+        created_at: createdAt,
+        status: 'preparing',
+      })
+      .select('id')
+      .single();
+
+    if (listError || !listRow) {
+      throw listError ?? new Error('Impossible de créer la liste');
+    }
+
+    const listId = Number(listRow['id']);
+
+    if (itemPayloads.length > 0) {
+      const { error: itemsError } = await this.supabase.supabase.from('shopping_list_items').insert(
+        itemPayloads.map((item) => ({
+          ...item,
+          shopping_list_id: listId,
+        })),
+      );
+
+      if (itemsError) {
+        throw itemsError;
+      }
+    }
+
+    this.refresh();
+    this.items.invalidate();
     return listId;
   }
 
   async validateList(id: number): Promise<void> {
-    const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT COUNT(*) as count FROM shoppingListItems WHERE shoppingListId = ? AND checked = 1;',
-      [id],
-    );
-    const selectedCount = Number(rows[0]?.['count'] ?? 0);
+    const { count, error: countError } = await this.supabase.supabase
+      .from('shopping_list_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', this.supabase.userId)
+      .eq('shopping_list_id', id)
+      .eq('checked', true);
 
-    if (selectedCount === 0) {
+    if (countError) {
+      throw countError;
+    }
+
+    if ((count ?? 0) === 0) {
       throw new NoSelectionError();
     }
 
-    await this.repo.update('shoppingLists', id, { status: 'shopping' });
-    this.invalidateSessionCache(id);
+    const { error } = await this.supabase.supabase
+      .from('shopping_lists')
+      .update({ status: 'shopping' })
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    this.refresh();
+    this.items.invalidate();
   }
 
   async reopenForEditing(id: number): Promise<void> {
-    await this.repo.transaction(async () => {
-      await this.repo.update('shoppingLists', id, { status: 'preparing' });
-      await this.repo.exec({
-        sql: 'UPDATE shoppingListItems SET pickedUp = 0 WHERE shoppingListId = ?;',
-        bind: [id],
-      });
-    });
-    this.invalidateSessionCache(id);
+    const { error: listError } = await this.supabase.supabase
+      .from('shopping_lists')
+      .update({ status: 'preparing' })
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (listError) {
+      throw listError;
+    }
+
+    const { error: itemsError } = await this.supabase.supabase
+      .from('shopping_list_items')
+      .update({ picked_up: false })
+      .eq('user_id', this.supabase.userId)
+      .eq('shopping_list_id', id);
+
+    if (itemsError) {
+      throw itemsError;
+    }
+
+    this.refresh();
+    this.items.invalidate();
   }
 
   async updateStatus(id: number, status: ShoppingListStatus): Promise<void> {
@@ -253,43 +310,79 @@ export class ShoppingListSessionService {
       return;
     }
 
-    await this.repo.update('shoppingLists', id, { status });
-    this.invalidateSessionCache(id);
+    const { error } = await this.supabase.supabase
+      .from('shopping_lists')
+      .update({ status })
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    this.refresh();
+    this.items.invalidate();
   }
 
   async delete(id: number): Promise<void> {
-    await this.repo.transaction(async () => {
-      await this.repo.exec({
-        sql: 'DELETE FROM shoppingListItems WHERE shoppingListId = ?;',
-        bind: [id],
-      });
-      await this.repo.exec({
-        sql: 'DELETE FROM shoppingLists WHERE id = ?;',
-        bind: [id],
-      });
-    });
-    this.repo.notifyChange('shoppingLists');
-    this.invalidateSessionCache(id);
+    const userId = this.supabase.userId;
+
+    const { error: itemsError } = await this.supabase.supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('user_id', userId)
+      .eq('shopping_list_id', id);
+
+    if (itemsError) {
+      throw itemsError;
+    }
+
+    const { error: listError } = await this.supabase.supabase
+      .from('shopping_lists')
+      .delete()
+      .eq('user_id', userId)
+      .eq('id', id);
+
+    if (listError) {
+      throw listError;
+    }
+
+    this.refresh();
+    this.items.invalidate();
   }
 
   private async loadListTypeHubData(listTypeId: number): Promise<ListTypeHubData> {
-    const listTypeRow = await this.repo.get<Record<string, unknown>>(
-      'SELECT id, name, orderIndex, hasMealCategories FROM baseListTypes WHERE id = ?;',
-      [listTypeId],
-    );
+    const userId = this.supabase.userId;
+
+    const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('id, name, order_index, has_meal_categories')
+      .eq('user_id', userId)
+      .eq('id', listTypeId)
+      .maybeSingle();
+
+    if (listTypeError) {
+      throw listTypeError;
+    }
+
     const sessions = await this.fetchSessionCardsByType(listTypeId);
 
     return {
-      listType: listTypeRow ? mapBaseListType(listTypeRow) : undefined,
+      listType: listTypeRow ? mapSupabaseBaseListType(listTypeRow) : undefined,
       sessions,
     };
   }
 
   private async fetchSessionCardsByType(listTypeId: number): Promise<SessionCardData[]> {
-    const listTypeRow = await this.repo.get<Record<string, unknown>>(
-      'SELECT name FROM baseListTypes WHERE id = ?;',
-      [listTypeId],
-    );
+    const userId = this.supabase.userId;
+
+    const { data: listTypeRow } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('name')
+      .eq('user_id', userId)
+      .eq('id', listTypeId)
+      .maybeSingle();
+
     const typeName = listTypeRow?.['name'] ? String(listTypeRow['name']) : 'Liste';
     const lists = await this.fetchListsByType(listTypeId);
     const listIds = lists
@@ -314,14 +407,20 @@ export class ShoppingListSessionService {
       return counts;
     }
 
-    const placeholders = listIds.map(() => '?').join(', ');
-    const rows = await this.repo.query<Record<string, unknown>>(
-      `SELECT shoppingListId, COUNT(*) as count FROM shoppingListItems WHERE checked = 1 AND shoppingListId IN (${placeholders}) GROUP BY shoppingListId;`,
-      listIds,
-    );
+    const { data, error } = await this.supabase.supabase
+      .from('shopping_list_items')
+      .select('shopping_list_id')
+      .eq('user_id', this.supabase.userId)
+      .eq('checked', true)
+      .in('shopping_list_id', listIds);
 
-    for (const row of rows) {
-      counts.set(Number(row['shoppingListId']), Number(row['count'] ?? 0));
+    if (error) {
+      throw error;
+    }
+
+    for (const row of data ?? []) {
+      const listId = Number(row['shopping_list_id']);
+      counts.set(listId, (counts.get(listId) ?? 0) + 1);
     }
 
     return counts;
@@ -332,33 +431,41 @@ export class ShoppingListSessionService {
       return [];
     }
 
-    const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, listTypeId, name, createdAt, status FROM shoppingLists WHERE listTypeId = ? ORDER BY createdAt DESC;',
-      [listTypeId],
-    );
+    const { data, error } = await this.supabase.supabase
+      .from('shopping_lists')
+      .select('id, list_type_id, name, created_at, status')
+      .eq('user_id', this.supabase.userId)
+      .eq('list_type_id', listTypeId)
+      .order('created_at', { ascending: false });
 
-    return rows.map((record) => this.normalizeSession(record)).sort((a, b) => b.createdAt - a.createdAt);
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map((record) => this.normalizeSession(record));
   }
 
   private async loadSessionById(id: number): Promise<ShoppingList | undefined> {
-    const record = await this.repo.get<Record<string, unknown>>(
-      'SELECT id, listTypeId, name, createdAt, status FROM shoppingLists WHERE id = ?;',
-      [id],
-    );
-    if (!record) {
-      return undefined;
+    const { data, error } = await this.supabase.supabase
+      .from('shopping_lists')
+      .select('id, list_type_id, name, created_at, status')
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
     }
 
-    return this.normalizeSession(record);
+    return data ? this.normalizeSession(data) : undefined;
   }
 
   private normalizeSession(record: Record<string, unknown>): ShoppingList {
+    const mapped = mapSupabaseShoppingList(record);
     return {
-      id: record['id'] !== undefined ? Number(record['id']) : undefined,
-      listTypeId: Number(record['listTypeId']),
-      name: extractSessionName(mapShoppingList(record)),
-      createdAt: Number(record['createdAt']) || Date.now(),
-      status: this.normalizeStatus(record['status'] as ShoppingListStatus),
+      ...mapped,
+      name: extractSessionName(mapped),
+      status: this.normalizeStatus(mapped.status),
     };
   }
 
@@ -377,28 +484,32 @@ export class ShoppingListSessionService {
     }
 
     const sessionId = session.id;
-    const unpickedItems =
-      session.status === 'shopping' ? await this.fetchUnpickedShoppingItems(sessionId) : [];
+    const followUpItems =
+      session.status === 'shopping' ? await this.buildFollowUpItems(sessionId) : [];
 
-    await this.repo.transaction(async () => {
-      await this.repo.exec({
-        sql: 'UPDATE shoppingLists SET status = ? WHERE id = ?;',
-        bind: ['completed', sessionId],
-      });
+    const { error: completeError } = await this.supabase.supabase
+      .from('shopping_lists')
+      .update({ status: 'completed' })
+      .eq('user_id', this.supabase.userId)
+      .eq('id', sessionId);
 
-      if (unpickedItems.length > 0) {
-        await this.createFollowUpSession({ ...session, id: sessionId }, unpickedItems);
-      }
-    });
+    if (completeError) {
+      throw completeError;
+    }
 
-    this.repo.notifyChange('shoppingLists');
-    this.invalidateSessionCache(sessionId);
+    if (followUpItems.length > 0) {
+      await this.createFollowUpSession({ ...session, id: sessionId }, followUpItems);
+    }
+
+    this.refresh();
+    this.items.invalidate();
   }
 
   private async createFollowUpSession(
     sourceSession: ShoppingList & { id: number },
     items: ShoppingListItem[],
   ): Promise<void> {
+    const userId = this.supabase.userId;
     const createdAt = Date.now();
     const listName = await this.buildUniqueStoreSessionName(
       sourceSession.listTypeId,
@@ -406,39 +517,94 @@ export class ShoppingListSessionService {
       createdAt,
     );
 
-    const listId = await this.repo.insert('shoppingLists', {
-      listTypeId: sourceSession.listTypeId,
-      name: listName,
-      createdAt,
-      status: 'preparing',
-    });
+    const { data: listRow, error: listError } = await this.supabase.supabase
+      .from('shopping_lists')
+      .insert({
+        user_id: userId,
+        list_type_id: sourceSession.listTypeId,
+        name: listName,
+        created_at: createdAt,
+        status: 'preparing',
+      })
+      .select('id')
+      .single();
 
-    for (const item of items) {
-      await this.repo.insert('shoppingListItems', {
-        shoppingListId: listId,
-        categoryName: item.categoryName,
-        categoryOrder: item.categoryOrder,
-        productName: item.productName,
-        productOrder: item.productOrder,
-        quantity: item.quantity,
-        checked: 1,
-        pickedUp: 0,
-        itemType: item.itemType,
-        recipeUrl: item.recipeUrl,
-      });
+    if (listError || !listRow) {
+      throw listError ?? new Error('Impossible de créer la liste de suivi');
+    }
+
+    const listId = Number(listRow['id']);
+
+    if (items.length > 0) {
+      const { error: itemsError } = await this.supabase.supabase.from('shopping_list_items').insert(
+        items.map((item) => ({
+          user_id: userId,
+          shopping_list_id: listId,
+          category_name: item.categoryName,
+          category_order: item.categoryOrder,
+          product_name: item.productName,
+          product_order: item.productOrder,
+          quantity: item.quantity,
+          checked: true,
+          picked_up: false,
+          item_type: item.itemType,
+          recipe_url: item.recipeUrl ?? null,
+        })),
+      );
+
+      if (itemsError) {
+        throw itemsError;
+      }
     }
   }
 
-  private async fetchUnpickedShoppingItems(listId: number): Promise<ShoppingListItem[]> {
-    const rows = await this.repo.query<Record<string, unknown>>(
-      `SELECT id, shoppingListId, categoryName, categoryOrder, productName, productOrder, quantity, checked, pickedUp, itemType, recipeUrl
-       FROM shoppingListItems
-       WHERE shoppingListId = ? AND checked = 1 AND pickedUp = 0
-       ORDER BY categoryOrder, productOrder;`,
-      [listId],
-    );
+  private async buildFollowUpItems(listId: number): Promise<ShoppingListItem[]> {
+    const unpickedItems = await this.fetchUnpickedShoppingItems(listId);
+    const meals = await this.fetchMealsFromSession(listId);
+    const unpickedNonMeals = unpickedItems.filter((item) => item.itemType !== 'meal');
 
-    return rows.map(mapShoppingListItem);
+    return [...unpickedNonMeals, ...meals].sort(
+      (a, b) => a.categoryOrder - b.categoryOrder || a.productOrder - b.productOrder,
+    );
+  }
+
+  private async fetchUnpickedShoppingItems(listId: number): Promise<ShoppingListItem[]> {
+    const { data, error } = await this.supabase.supabase
+      .from('shopping_list_items')
+      .select(
+        'id, shopping_list_id, category_name, category_order, product_name, product_order, quantity, checked, picked_up, item_type, recipe_url',
+      )
+      .eq('user_id', this.supabase.userId)
+      .eq('shopping_list_id', listId)
+      .eq('checked', true)
+      .eq('picked_up', false)
+      .order('category_order')
+      .order('product_order');
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(mapSupabaseShoppingListItem);
+  }
+
+  private async fetchMealsFromSession(listId: number): Promise<ShoppingListItem[]> {
+    const { data, error } = await this.supabase.supabase
+      .from('shopping_list_items')
+      .select(
+        'id, shopping_list_id, category_name, category_order, product_name, product_order, quantity, checked, picked_up, item_type, recipe_url',
+      )
+      .eq('user_id', this.supabase.userId)
+      .eq('shopping_list_id', listId)
+      .eq('item_type', 'meal')
+      .order('category_order')
+      .order('product_order');
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(mapSupabaseShoppingListItem);
   }
 
   private async buildUniqueStoreSessionName(
@@ -456,53 +622,84 @@ export class ShoppingListSessionService {
     listTypeId: number,
     excludeId?: number,
   ): Promise<string[]> {
-    const rows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, listTypeId, name, createdAt, status FROM shoppingLists WHERE listTypeId = ?;',
-      [listTypeId],
-    );
+    const { data, error } = await this.supabase.supabase
+      .from('shopping_lists')
+      .select('id, list_type_id, name, created_at, status')
+      .eq('user_id', this.supabase.userId)
+      .eq('list_type_id', listTypeId);
 
-    return rows
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? [])
       .filter((record) => Number(record['id']) !== excludeId)
       .map((record) => extractSessionName(this.normalizeSession(record)))
       .filter((name) => name.length > 0);
   }
 
   private async isBaseEmpty(listTypeId: number): Promise<boolean> {
-    const categoryRows = await this.repo.query<Record<string, unknown>>(
-      'SELECT id, type FROM baseCategories WHERE listTypeId = ?;',
-      [listTypeId],
-    );
+    const userId = this.supabase.userId;
+
+    const { data: categoryRows, error: categoriesError } = await this.supabase.supabase
+      .from('base_categories')
+      .select('id, type')
+      .eq('user_id', userId)
+      .eq('list_type_id', listTypeId);
+
+    if (categoriesError) {
+      throw categoriesError;
+    }
 
     let itemCount = 0;
 
-    for (const category of categoryRows) {
+    for (const category of categoryRows ?? []) {
       if (category['id'] === undefined || category['type'] === 'meals') {
         continue;
       }
 
-      const productRows = await this.repo.query<Record<string, unknown>>(
-        'SELECT COUNT(*) as count FROM baseProducts WHERE categoryId = ?;',
-        [category['id']],
-      );
-      itemCount += Number(productRows[0]?.['count'] ?? 0);
+      const { count, error: productsError } = await this.supabase.supabase
+        .from('base_products')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('category_id', category['id']);
+
+      if (productsError) {
+        throw productsError;
+      }
+
+      itemCount += count ?? 0;
     }
 
-    const listTypeRow = await this.repo.get<Record<string, unknown>>(
-      'SELECT hasMealCategories FROM baseListTypes WHERE id = ?;',
-      [listTypeId],
-    );
-    if (listTypeRow && toSqliteBoolean(Boolean(listTypeRow['hasMealCategories']))) {
-      const mealRows = await this.repo.query<Record<string, unknown>>(
-        'SELECT COUNT(*) as count FROM baseMeals WHERE listTypeId = ?;',
-        [listTypeId],
-      );
-      itemCount += Number(mealRows[0]?.['count'] ?? 0);
+    const { data: listTypeRow, error: listTypeError } = await this.supabase.supabase
+      .from('base_list_types')
+      .select('has_meal_categories')
+      .eq('user_id', userId)
+      .eq('id', listTypeId)
+      .maybeSingle();
+
+    if (listTypeError) {
+      throw listTypeError;
+    }
+
+    if (listTypeRow && Boolean(listTypeRow['has_meal_categories'])) {
+      const { count, error: mealsError } = await this.supabase.supabase
+        .from('base_meals')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('list_type_id', listTypeId);
+
+      if (mealsError) {
+        throw mealsError;
+      }
+
+      itemCount += count ?? 0;
     }
 
     return itemCount === 0;
   }
 
-  private invalidateSessionCache(id: number): void {
-    this.sessionByIdStreams.delete(id);
+  private refresh(): void {
+    this.refresh$.next();
   }
 }
