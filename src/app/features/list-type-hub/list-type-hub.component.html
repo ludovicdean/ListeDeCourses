@@ -21,15 +21,15 @@
     </mat-card>
 
     <section class="sessions">
-      <h2>Mes sessions ({{ vm().sessions.length }})</h2>
+      <h2>Courses en cours ({{ vm().activeSessions.length }})</h2>
 
-      @if (vm().sessions.length === 0) {
+      @if (vm().activeSessions.length === 0) {
         <p class="empty-state">
-          Aucune liste pour l'instant. Commencez par « Préparer une liste ».
+          Aucune liste en cours. Commencez par « Préparer une liste ».
         </p>
       } @else {
         <div class="session-list">
-          @for (session of vm().sessions; track session.id) {
+          @for (session of vm().activeSessions; track session.id) {
             <app-session-card
               [data]="session"
               (open)="openList(session.id)"
@@ -42,5 +42,23 @@
         </div>
       }
     </section>
+
+    @if (vm().completedSessions.length > 0) {
+      <section class="sessions sessions--completed">
+        <h2>Dernières courses ({{ vm().completedSessions.length }})</h2>
+        <div class="session-list">
+          @for (session of vm().completedSessions; track session.id) {
+            <app-session-card
+              [data]="session"
+              (open)="openList(session.id)"
+              (edit)="editList(session.id)"
+              (validate)="validateList(session.id)"
+              (complete)="completeList(session.id)"
+              (remove)="deleteList(session.id)"
+            />
+          }
+        </div>
+      </section>
+    }
   </div>
 }

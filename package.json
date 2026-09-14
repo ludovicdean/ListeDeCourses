@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
+    "generate-env": "node scripts/generate-env.mjs",
+    "prestart": "npm run generate-env",
     "start": "ng serve",
+    "prebuild": "npm run generate-env",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
@@ -24,7 +27,7 @@
     "@angular/platform-browser": "^22.0.0",
     "@angular/router": "^22.0.0",
     "@angular/service-worker": "^22.0.0",
-    "dexie": "^4.4.4",
+    "@supabase/supabase-js": "^2.116.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

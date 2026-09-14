@@ -1,4 +1,6 @@
 export const INGREDIENTS_CATEGORY_NAME = 'Ingrédients Repas';
 export const MEALS_CATEGORY_NAME = 'Repas';
-export const INGREDIENTS_CATEGORY_ORDER = -100;
-export const MEALS_CATEGORY_ORDER = -99;
+/** Placed after standard shopping categories. */
+export const INGREDIENTS_CATEGORY_ORDER = 10_000;
+/** Placed after ingredients, visually separated from the shopping list. */
+export const MEALS_CATEGORY_ORDER = 10_001;

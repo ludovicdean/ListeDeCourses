@@ -1,43 +1,132 @@
 import { Injectable, inject } from '@angular/core';
-import { type Observable } from 'rxjs';
+import { BehaviorSubject, type Observable, switchMap } from 'rxjs';
 
-import { shoppingDb } from '@core/database/shopping-db';
+import { mapSupabaseBaseProduct } from '@core/database/supabase-mapper';
 import type { BaseProduct, BaseProductInput } from '@core/models/base-product.model';
-import { LiveQueryService } from './live-query.service';
+import { SupabaseService } from './supabase.service';
 
 @Injectable({ providedIn: 'root' })
 export class BaseProductService {
-  private readonly liveQuery = inject(LiveQueryService);
+  private readonly supabase = inject(SupabaseService);
+  private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   getByCategory(categoryId: number): Observable<BaseProduct[]> {
-    return this.liveQuery.observe(() =>
-      shoppingDb.baseProducts.where('categoryId').equals(categoryId).sortBy('order'),
+    return this.refresh$.pipe(
+      switchMap(async () => {
+        const { data, error } = await this.supabase.supabase
+          .from('base_products')
+          .select('id, category_id, name, quantity, order_index')
+          .eq('user_id', this.supabase.userId)
+          .eq('category_id', categoryId)
+          .order('order_index');
+
+        if (error) {
+          throw error;
+        }
+
+        return (data ?? []).map(mapSupabaseBaseProduct);
+      }),
     );
   }
 
   async create(input: BaseProductInput): Promise<number> {
-    return shoppingDb.baseProducts.add(input);
+    const { data, error } = await this.supabase.supabase
+      .from('base_products')
+      .insert({
+        user_id: this.supabase.userId,
+        category_id: input.categoryId,
+        name: input.name,
+        quantity: input.quantity ?? null,
+        order_index: input.order,
+      })
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      throw error ?? new Error('Impossible de créer le produit');
+    }
+
+    this.refresh();
+    return Number(data['id']);
   }
 
   async update(id: number, changes: Partial<BaseProductInput>): Promise<void> {
-    await shoppingDb.baseProducts.update(id, changes);
+    const payload: Record<string, unknown> = {};
+    if (changes.categoryId !== undefined) {
+      payload['category_id'] = changes.categoryId;
+    }
+    if (changes.name !== undefined) {
+      payload['name'] = changes.name;
+    }
+    if (changes.quantity !== undefined) {
+      payload['quantity'] = changes.quantity ?? null;
+    }
+    if (changes.order !== undefined) {
+      payload['order_index'] = changes.order;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    const { error } = await this.supabase.supabase
+      .from('base_products')
+      .update(payload)
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    this.refresh();
   }
 
   async delete(id: number): Promise<void> {
-    await shoppingDb.baseProducts.delete(id);
+    const { error } = await this.supabase.supabase
+      .from('base_products')
+      .delete()
+      .eq('user_id', this.supabase.userId)
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    this.refresh();
   }
 
   async getNextOrder(categoryId: number): Promise<number> {
-    const last = await shoppingDb.baseProducts
-      .where('categoryId')
-      .equals(categoryId)
-      .sortBy('order')
-      .then((products) => products.at(-1));
+    const { data, error } = await this.supabase.supabase
+      .from('base_products')
+      .select('order_index')
+      .eq('user_id', this.supabase.userId)
+      .eq('category_id', categoryId)
+      .order('order_index', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    return (last?.order ?? -1) + 1;
+    if (error) {
+      throw error;
+    }
+
+    return (data ? Number(data['order_index']) : -1) + 1;
   }
 
   async count(): Promise<number> {
-    return shoppingDb.baseProducts.count();
+    const { count, error } = await this.supabase.supabase
+      .from('base_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', this.supabase.userId);
+
+    if (error) {
+      throw error;
+    }
+
+    return count ?? 0;
+  }
+
+  private refresh(): void {
+    this.refresh$.next();
   }
 }

@@ -1,4 +1,6 @@
 import { Routes } from '@angular/router';
+import { authGuard, guestGuard } from '@core/guards/auth.guard';
+
 
 import {
   categoryIdGuard,
@@ -9,17 +11,18 @@ import {
 export const routes: Routes = [
   {
     path: '',
+    canActivate: [authGuard],
     loadComponent: () => import('@features/home/home.component').then((m) => m.HomeComponent),
   },
   {
     path: 'type/:listTypeId',
-    canActivate: [listTypeIdGuard],
+    canActivate: [authGuard,listTypeIdGuard],
     loadComponent: () =>
       import('@features/list-type-hub/list-type-hub.component').then((m) => m.ListTypeHubComponent),
   },
   {
     path: 'list/:id',
-    canActivate: [sessionIdGuard],
+    canActivate: [authGuard,sessionIdGuard],
     loadComponent: () =>
       import('@features/shopping/shopping-list-view/shopping-list-view.component').then(
         (m) => m.ShoppingListViewComponent,
@@ -27,7 +30,7 @@ export const routes: Routes = [
   },
   {
     path: 'base/:listTypeId',
-    canActivate: [listTypeIdGuard],
+    canActivate: [authGuard,listTypeIdGuard],
     loadComponent: () =>
       import('@features/base/pages/template-list/base-template-list.component').then(
         (m) => m.BaseTemplateListComponent,
@@ -35,7 +38,7 @@ export const routes: Routes = [
   },
   {
     path: 'base/:listTypeId/ingredients',
-    canActivate: [listTypeIdGuard],
+    canActivate: [authGuard,listTypeIdGuard],
     loadComponent: () =>
       import('@features/base/pages/ingredients/base-ingredients.component').then(
         (m) => m.BaseIngredientsComponent,
@@ -43,17 +46,23 @@ export const routes: Routes = [
   },
   {
     path: 'base/:listTypeId/meals',
-    canActivate: [listTypeIdGuard],
+    canActivate: [authGuard,listTypeIdGuard],
     loadComponent: () =>
       import('@features/base/pages/meals/base-meals.component').then((m) => m.BaseMealsComponent),
   },
   {
     path: 'base/:listTypeId/category/:id',
-    canActivate: [listTypeIdGuard, categoryIdGuard],
+    canActivate: [authGuard,listTypeIdGuard, categoryIdGuard],
     loadComponent: () =>
       import('@features/base/pages/category-detail/base-category-detail.component').then(
         (m) => m.BaseCategoryDetailComponent,
       ),
+  },
+  {
+    path: 'login',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('@features/auth/login/login.component').then((m) => m.LoginComponent),
   },
   { path: '**', redirectTo: '' },
 ];

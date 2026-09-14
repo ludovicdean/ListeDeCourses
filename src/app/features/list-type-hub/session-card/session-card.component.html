@@ -1,10 +1,17 @@
 <article class="session-card" [attr.data-session-id]="data().id">
   <button type="button" class="session-main" (click)="open.emit()">
-    <p class="session-title">{{ data().name || 'Session #' + data().id }}</p>
+    <p class="session-title">{{ data().name }}</p>
     <p class="session-date">
-      {{ data().createdAt | date: 'd MMM y, HH:mm' : '' : 'fr' }}
-      <br />
-      <small>debug: id={{ data().id }} name='{{ data().name }}' status={{ data().status }}</small>
+      {{ data().createdAt | date: 'd MMM y, HH:mm' }}
+    </p>
+    <p class="session-selected">
+      @if (data().selectedCount === 0) {
+        Aucun produit sélectionné
+      } @else if (data().selectedCount === 1) {
+        1 produit sélectionné
+      } @else {
+        {{ data().selectedCount }} produits sélectionnés
+      }
     </p>
     <span class="session-status" [class]="data().status">
       @switch (data().status) {

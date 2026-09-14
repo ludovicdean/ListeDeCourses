@@ -1,6 +1,14 @@
 import type { ShoppingList } from '@core/models/shopping-list.model';
 
-import { formatSessionDate, formatSessionName } from './session-name.utils';
+import {
+  LIDL_SESSION_PREFIX,
+  SUPER_U_SESSION_PREFIX,
+  formatSessionDate,
+  formatSessionName,
+  formatSessionShortDate,
+  formatStoreSessionName,
+  resolveUniqueStoreSessionIndex,
+} from './session-name.utils';
 
 describe('session-name.utils', () => {
   const typeName = 'Courses hebdomadaire';
@@ -32,15 +40,23 @@ describe('session-name.utils', () => {
     );
   });
 
-  it('builds a fallback name when name is missing', () => {
-    const session: ShoppingList = {
-      id: 1,
-      listTypeId: 1,
-      name: '',
-      createdAt: 0,
-      status: 'preparing',
-    };
+  it('formats short dates as dd/mm/yy', () => {
+    expect(formatSessionShortDate(date)).toBe('28/08/26');
+  });
 
-    expect(formatSessionName(session, typeName)).toContain(typeName);
+  it('formats store session names with increment', () => {
+    expect(formatStoreSessionName(LIDL_SESSION_PREFIX, date)).toBe('courses lidl 28/08/26');
+    expect(formatStoreSessionName(LIDL_SESSION_PREFIX, date, 2)).toBe('courses lidl 28/08/26 2');
+    expect(formatStoreSessionName(SUPER_U_SESSION_PREFIX, date, 3)).toBe('courses super u 28/08/26 3');
+  });
+
+  it('resolves the first free store session index', () => {
+    const index = resolveUniqueStoreSessionIndex(
+      ['courses lidl 28/08/26', 'courses lidl 28/08/26 2'],
+      LIDL_SESSION_PREFIX,
+      date,
+    );
+
+    expect(index).toBe(3);
   });
 });
